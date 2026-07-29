@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover" />
 <title>yeeinaa Skincare Scanner</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -464,6 +464,16 @@
         <img id="photo-preview" style="display:none;" />
         <input type="file" accept="image/*" capture="environment" id="photo-input" />
       </label>
+
+      <div class="card" style="padding:14px; margin-bottom:16px;">
+        <label style="display:block; font-family:'IBM Plex Mono', monospace; font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-soft); margin-bottom:8px;">Atau cari nama produk</label>
+        <div style="display:flex; gap:8px;">
+          <input type="text" id="name-search-input" placeholder="cth. PDRN Hyaluronic Acid Serum" style="flex:1; font-family:'IBM Plex Sans'; font-size:14.5px; padding:11px 13px; border-radius:9px; border:1px solid var(--clay-line); background:var(--paper);" />
+          <button id="name-search-btn" style="font-family:'IBM Plex Sans'; font-weight:500; font-size:13.5px; padding:0 16px; border-radius:9px; border:none; background:var(--ink); color:var(--cream); cursor:pointer;">Cari</button>
+        </div>
+        <div id="name-search-results" style="margin-top:10px; display:flex; flex-direction:column; gap:6px;"></div>
+        <div id="name-search-status" style="font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--ink-soft); margin-top:8px;"></div>
+      </div>
     </div>
 
     <!-- shared form (fills after barcode hit, or manual) -->
@@ -547,6 +557,7 @@ let pickedConcerns = new Set();
 let pickedCondition = "New";
 let pickedLocation = "Daejeon";
 let photoDataUrl = null;
+let scannedBarcode = null;
 
 /* ---------------- tab nav ---------------- */
 function showView(id){
@@ -574,6 +585,7 @@ modeManual.onclick = ()=>{
   modeManual.classList.add("active"); modeBarcode.classList.remove("active");
   panelManual.style.display="block"; panelBarcode.style.display="none";
   stopScanner();
+  scannedBarcode = null;
   formCard.style.display="block";
 };
 
@@ -613,17 +625,31 @@ let lastCode = null;
 async function onBarcodeDetected(code){
   if(code === lastCode) return;
   lastCode = code;
+  scannedBarcode = code;
   const status = document.getElementById("lookup-status");
   status.className = "lookup-status show loading";
-  status.textContent = `barcode ${code} — nyari di database...`;
+  status.textContent = `barcode ${code} — nyari di koleksi & database...`;
 
+  // 1. cek dulu apakah barcode ini udah ada di koleksi sendiri
+  try{
+    const { data: existing } = await sb.from("products").select("id,product_name,brand,amount").eq("barcode", code).limit(1);
+    if(existing && existing.length){
+      const p = existing[0];
+      status.className = "lookup-status show ok";
+      status.textContent = `udah ada di koleksi: "${p.product_name}" (x${p.amount}) — kalau ini botol baru, lanjut isi expired date-nya, nanti disimpan sebagai baris terpisah`;
+      openForm({ name:p.product_name, brand:p.brand||"", type:"" });
+      return;
+    }
+  } catch(e){ /* ignore, lanjut ke lookup publik */ }
+
+  // 2. belum ada, coba lookup publik buat autofill
   try{
     const res = await fetch(`https://world.openbeautyfacts.org/api/v0/product/${code}.json`);
     const data = await res.json();
     if(data.status === 1 && data.product){
       const p = data.product;
       status.className = "lookup-status show ok";
-      status.textContent = `ketemu: ${p.product_name || "produk"} — cek & lengkapi di bawah`;
+      status.textContent = `belum ada di koleksi. ketemu di database: ${p.product_name || "produk"} — cek & lengkapi di bawah`;
       openForm({
         name: p.product_name || "",
         brand: p.brands || "",
@@ -631,12 +657,12 @@ async function onBarcodeDetected(code){
       });
     } else {
       status.className = "lookup-status show miss";
-      status.textContent = "ga ketemu di database publik (wajar buat brand K-beauty niche) — isi manual di bawah ya";
+      status.textContent = "belum ada di koleksi, dan ga ketemu di database publik (wajar buat brand K-beauty niche) — isi manual di bawah ya";
       openForm({ name:"", brand:"", type:"" });
     }
   } catch(e){
     status.className = "lookup-status show miss";
-    status.textContent = "gagal connect ke database — isi manual di bawah ya";
+    status.textContent = "belum ada di koleksi. gagal connect ke database publik — isi manual di bawah ya";
     openForm({ name:"", brand:"", type:"" });
   }
 }
@@ -716,7 +742,8 @@ document.getElementById("save-btn").onclick = async ()=>{
     condition: pickedCondition,
     location: pickedLocation,
     place: null,
-    skin_concerns: pickedConcerns.size ? Array.from(pickedConcerns) : null
+    skin_concerns: pickedConcerns.size ? Array.from(pickedConcerns) : null,
+    barcode: scannedBarcode
   };
 
   const { error } = await sb.from("products").insert(payload);
@@ -747,6 +774,7 @@ function resetForm(){
   document.getElementById("photo-preview").style.display="none";
   document.getElementById("photo-input").value = "";
   lastCode = null;
+  scannedBarcode = null;
   const status = document.getElementById("lookup-status");
   status.className = "lookup-status";
   status.textContent = "";
@@ -859,6 +887,51 @@ function renderList(){
 
 function escapeHtml(s){
   return (s||"").replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+}
+
+/* ---------------- search by name (Open Beauty Facts) ---------------- */
+document.getElementById("name-search-btn").onclick = searchByName;
+document.getElementById("name-search-input").addEventListener("keydown", (e)=>{
+  if(e.key === "Enter") searchByName();
+});
+
+async function searchByName(){
+  const q = document.getElementById("name-search-input").value.trim();
+  const resultsWrap = document.getElementById("name-search-results");
+  const statusEl = document.getElementById("name-search-status");
+  resultsWrap.innerHTML = "";
+  if(!q){ statusEl.textContent = "ketik nama produk dulu ya"; return; }
+
+  statusEl.textContent = "nyari...";
+  try{
+    const url = `https://world.openbeautyfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1&page_size=6`;
+    const res = await fetch(url);
+    const data = await res.json();
+    const products = (data.products || []).filter(p => p.product_name);
+
+    if(!products.length){
+      statusEl.textContent = "ga ketemu di database publik — isi manual aja di form bawah";
+      return;
+    }
+    statusEl.textContent = `${products.length} hasil ditemukan, tap buat pilih:`;
+    resultsWrap.innerHTML = products.map((p,i)=>`
+      <div class="name-result" data-i="${i}" style="padding:10px 12px; border:1px solid var(--clay-line); border-radius:9px; cursor:pointer; font-size:13.5px;">
+        <b>${escapeHtml(p.product_name)}</b>${p.brands ? " — " + escapeHtml(p.brands) : ""}
+      </div>
+    `).join("");
+
+    resultsWrap.querySelectorAll(".name-result").forEach(el=>{
+      el.onclick = ()=>{
+        const p = products[Number(el.dataset.i)];
+        scannedBarcode = p.code || null;
+        openForm({ name: p.product_name || "", brand: p.brands || "", type: "" });
+        statusEl.textContent = `dipilih: ${p.product_name}`;
+        resultsWrap.innerHTML = "";
+      };
+    });
+  } catch(e){
+    statusEl.textContent = "gagal nyari — coba lagi atau isi manual";
+  }
 }
 
 /* ---------------- init ---------------- */
