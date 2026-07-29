@@ -33,13 +33,13 @@
     font-family:'IBM Plex Sans', sans-serif;
     -webkit-font-smoothing:antialiased;
     min-height:100vh;
-    padding-bottom:96px;
+    padding-bottom:calc(110px + env(safe-area-inset-bottom));
   }
   ::selection{background:var(--berry); color:#fff;}
 
   /* ---------- header ---------- */
   header.top{
-    padding:28px 20px 18px;
+    padding:calc(28px + env(safe-area-inset-top)) 20px 18px;
     max-width:640px;
     margin:0 auto;
   }
@@ -467,10 +467,7 @@
 
       <div class="card" style="padding:14px; margin-bottom:16px;">
         <label style="display:block; font-family:'IBM Plex Mono', monospace; font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-soft); margin-bottom:8px;">Atau cari nama produk</label>
-        <div style="display:flex; gap:8px;">
-          <input type="text" id="name-search-input" placeholder="cth. PDRN Hyaluronic Acid Serum" style="flex:1; font-family:'IBM Plex Sans'; font-size:14.5px; padding:11px 13px; border-radius:9px; border:1px solid var(--clay-line); background:var(--paper);" />
-          <button id="name-search-btn" style="font-family:'IBM Plex Sans'; font-weight:500; font-size:13.5px; padding:0 16px; border-radius:9px; border:none; background:var(--ink); color:var(--cream); cursor:pointer;">Cari</button>
-        </div>
+        <input type="text" id="name-search-input" placeholder="ketik nama produk..." style="width:100%; font-family:'IBM Plex Sans'; font-size:14.5px; padding:11px 13px; border-radius:9px; border:1px solid var(--clay-line); background:var(--paper);" />
         <div id="name-search-results" style="margin-top:10px; display:flex; flex-direction:column; gap:6px;"></div>
         <div id="name-search-status" style="font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--ink-soft); margin-top:8px;"></div>
       </div>
@@ -537,15 +534,80 @@
     <div class="product-list" id="product-list"></div>
   </section>
 
+  <!-- COLLABS VIEW -->
+  <section class="view" id="view-collabs">
+    <div class="card" style="padding:16px; margin-bottom:18px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+        <div>
+          <div class="pname" style="font-size:15px;">Google Calendar</div>
+          <div id="gcal-status" style="font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--ink-soft); margin-top:2px;">belum connect</div>
+        </div>
+        <button id="gcal-connect-btn" style="font-family:'IBM Plex Sans'; font-weight:500; font-size:13px; padding:9px 16px; border-radius:9px; border:none; background:var(--ink); color:var(--cream); cursor:pointer; white-space:nowrap;">Connect</button>
+      </div>
+    </div>
+
+    <div class="card form-card" style="margin-bottom:18px;">
+      <div class="field">
+        <label>Brand</label>
+        <input type="text" id="c-brand" list="brand-list" placeholder="cth. Anua" />
+      </div>
+      <div class="field">
+        <label>Produk / item endorse</label>
+        <input type="text" id="c-product" list="product-list" placeholder="ketik/pilih dari koleksi, atau nama baru" />
+        <datalist id="product-list"></datalist>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>Platform</label>
+          <input type="text" id="c-platform" placeholder="cth. Instagram Reels" />
+        </div>
+        <div class="field">
+          <label>Status</label>
+          <select id="c-status">
+            <option>Received</option>
+            <option>Planned</option>
+            <option>Filmed</option>
+            <option>Posted</option>
+            <option>Paid</option>
+          </select>
+        </div>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>Tanggal terima barang</label>
+          <input type="date" id="c-received" />
+        </div>
+        <div class="field">
+          <label>Deadline konten</label>
+          <input type="date" id="c-deadline" />
+        </div>
+      </div>
+      <div class="field">
+        <label>Tanggal posting</label>
+        <input type="date" id="c-post" />
+      </div>
+      <div class="field">
+        <label>Catatan</label>
+        <input type="text" id="c-notes" placeholder="opsional" />
+      </div>
+      <button class="save-btn" id="collab-save-btn">Simpan collab</button>
+      <div class="toast" id="collab-toast"></div>
+    </div>
+
+    <div class="product-list" id="collab-list"></div>
+  </section>
+
 </main>
 
 <footer class="tabbar">
   <button class="tab-btn active" data-view="view-add" id="tabbtn-add"><span class="ic">＋</span>Tambah</button>
   <button class="tab-btn" data-view="view-collection" id="tabbtn-collection"><span class="ic">▦</span>Koleksi</button>
+  <button class="tab-btn" data-view="view-collabs" id="tabbtn-collabs"><span class="ic">◷</span>Collabs</button>
 </footer>
 
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
 const SUPABASE_URL = "https://xrwutimnlbfzwxjjxlxh.supabase.co";
 const SUPABASE_KEY = "sb_publishable_DOft66tlmt228oca4TDzGQ_SLvQsY_M";
@@ -565,9 +627,11 @@ function showView(id){
   document.getElementById(id).classList.add("active");
   document.querySelectorAll(".tab-btn").forEach(b=>b.classList.toggle("active", b.dataset.view===id));
   if(id==="view-collection") loadCollection();
+  if(id==="view-collabs") loadCollabs();
 }
 document.getElementById("tabbtn-add").onclick = ()=>showView("view-add");
 document.getElementById("tabbtn-collection").onclick = ()=>showView("view-collection");
+document.getElementById("tabbtn-collabs").onclick = ()=>showView("view-collabs");
 
 /* ---------------- mode switch ---------------- */
 const modeBarcode = document.getElementById("mode-barcode");
@@ -781,13 +845,23 @@ function resetForm(){
 }
 
 /* ---------------- brand / type autocomplete ---------------- */
+let productNameMap = {}; // product_name (lowercase) -> {id, brand}
 async function loadBrandTypeLists(){
-  const { data } = await sb.from("products").select("brand,type");
+  const { data } = await sb.from("products").select("id,product_name,brand,type");
   if(!data) return;
   const brands = [...new Set(data.map(d=>d.brand).filter(Boolean))].sort();
   const types = [...new Set(data.map(d=>d.type).filter(Boolean))].sort();
   document.getElementById("brand-list").innerHTML = brands.map(b=>`<option value="${b}">`).join("");
   document.getElementById("type-list").innerHTML = types.map(t=>`<option value="${t}">`).join("");
+
+  productNameMap = {};
+  data.forEach(p=>{
+    if(p.product_name) productNameMap[p.product_name.toLowerCase()] = { id:p.id, brand:p.brand };
+  });
+  const productListEl = document.getElementById("product-list");
+  if(productListEl){
+    productListEl.innerHTML = data.filter(p=>p.product_name).map(p=>`<option value="${p.product_name}">`).join("");
+  }
 }
 
 /* ---------------- collection view ---------------- */
@@ -890,9 +964,17 @@ function escapeHtml(s){
 }
 
 /* ---------------- search by name (Open Beauty Facts) ---------------- */
-document.getElementById("name-search-btn").onclick = searchByName;
-document.getElementById("name-search-input").addEventListener("keydown", (e)=>{
-  if(e.key === "Enter") searchByName();
+let searchDebounce = null;
+document.getElementById("name-search-input").addEventListener("input", ()=>{
+  clearTimeout(searchDebounce);
+  const val = document.getElementById("name-search-input").value.trim();
+  if(val.length < 3){
+    document.getElementById("name-search-results").innerHTML = "";
+    document.getElementById("name-search-status").textContent = val.length ? "ketik minimal 3 huruf..." : "";
+    return;
+  }
+  document.getElementById("name-search-status").textContent = "nyari...";
+  searchDebounce = setTimeout(searchByName, 500);
 });
 
 async function searchByName(){
@@ -934,9 +1016,154 @@ async function searchByName(){
   }
 }
 
+/* ---------------- Google Calendar ---------------- */
+const GOOGLE_CLIENT_ID = "965668256942-q2cfs8hp30nn42qekp662vei8f9sd3qu.apps.googleusercontent.com";
+const GCAL_SCOPE = "https://www.googleapis.com/auth/calendar.events";
+let gTokenClient = null;
+let gAccessToken = null;
+
+function initGoogle(){
+  if(!window.google || !google.accounts){ setTimeout(initGoogle, 300); return; }
+  gTokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID,
+    scope: GCAL_SCOPE,
+    callback: (resp)=>{
+      if(resp && resp.access_token){
+        gAccessToken = resp.access_token;
+        document.getElementById("gcal-status").textContent = "connected ✓";
+        document.getElementById("gcal-connect-btn").textContent = "Reconnect";
+      }
+    }
+  });
+}
+document.getElementById("gcal-connect-btn").onclick = ()=>{
+  if(!gTokenClient){ document.getElementById("gcal-status").textContent = "lagi loading, coba lagi sebentar"; return; }
+  gTokenClient.requestAccessToken();
+};
+
+async function syncToCalendar(collab){
+  if(!gAccessToken){
+    alert("Connect ke Google Calendar dulu ya (tombol Connect di atas)");
+    return;
+  }
+  if(!collab.post_date){
+    alert("Isi tanggal posting dulu buat bisa sync ke calendar");
+    return;
+  }
+  const event = {
+    summary: `Post: ${collab.product_name || collab.brand} (${collab.platform || ""})`,
+    description: `Brand: ${collab.brand}\nStatus: ${collab.status}\n${collab.notes || ""}`,
+    start: { date: collab.post_date },
+    end: { date: collab.post_date }
+  };
+  try{
+    let res;
+    if(collab.calendar_event_id){
+      res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${collab.calendar_event_id}`, {
+        method: "PUT",
+        headers: { "Authorization": `Bearer ${gAccessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify(event)
+      });
+    } else {
+      res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${gAccessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify(event)
+      });
+    }
+    const data = await res.json();
+    if(data.id){
+      await sb.from("collabs").update({ calendar_event_id: data.id }).eq("id", collab.id);
+      loadCollabs();
+    } else {
+      alert("gagal sync ke calendar: " + (data.error?.message || "unknown error"));
+    }
+  } catch(e){
+    alert("gagal sync ke calendar");
+  }
+}
+
+/* ---------------- collabs CRUD ---------------- */
+document.getElementById("c-product").addEventListener("change", ()=>{
+  const val = document.getElementById("c-product").value.trim().toLowerCase();
+  const match = productNameMap[val];
+  if(match && !document.getElementById("c-brand").value.trim()){
+    document.getElementById("c-brand").value = match.brand || "";
+  }
+});
+
+document.getElementById("collab-save-btn").onclick = async ()=>{
+  const brand = document.getElementById("c-brand").value.trim();
+  if(!brand){
+    document.getElementById("collab-toast").style.color = "#B23A5C";
+    document.getElementById("collab-toast").textContent = "brand wajib diisi ya";
+    return;
+  }
+  const productNameVal = document.getElementById("c-product").value.trim();
+  const matchedProduct = productNameMap[productNameVal.toLowerCase()];
+  const payload = {
+    brand,
+    product_name: productNameVal || null,
+    product_id: matchedProduct ? matchedProduct.id : null,
+    platform: document.getElementById("c-platform").value.trim() || null,
+    status: document.getElementById("c-status").value,
+    received_date: document.getElementById("c-received").value || null,
+    content_deadline: document.getElementById("c-deadline").value || null,
+    post_date: document.getElementById("c-post").value || null,
+    notes: document.getElementById("c-notes").value.trim() || null
+  };
+  const { error } = await sb.from("collabs").insert(payload);
+  const toast = document.getElementById("collab-toast");
+  if(error){
+    toast.style.color = "#B23A5C";
+    toast.textContent = "gagal simpan: " + error.message;
+  } else {
+    toast.style.color = "#7C8B6F";
+    toast.textContent = "✓ collab tersimpan";
+    ["c-brand","c-product","c-platform","c-received","c-deadline","c-post","c-notes"].forEach(id=>document.getElementById(id).value="");
+    document.getElementById("c-status").value = "Received";
+    loadCollabs();
+  }
+};
+
+async function loadCollabs(){
+  const wrap = document.getElementById("collab-list");
+  wrap.innerHTML = `<div class="empty">memuat collabs...</div>`;
+  const { data, error } = await sb.from("collabs").select("*").order("post_date", { ascending: true, nullsFirst:false });
+  if(error){
+    wrap.innerHTML = `<div class="empty">gagal muat: ${error.message}</div>`;
+    return;
+  }
+  if(!data || !data.length){
+    wrap.innerHTML = `<div class="empty">belum ada collab dicatat</div>`;
+    return;
+  }
+  wrap.innerHTML = "";
+  data.forEach(c=>{
+    const div = document.createElement("div");
+    div.className = "product";
+    const meta = [c.platform, c.status, c.post_date ? "post: "+c.post_date : null].filter(Boolean).join(" · ");
+    const linkedBadge = c.product_id ? `<span style="font-family:'IBM Plex Mono', monospace; font-size:9.5px; padding:2px 7px; border-radius:5px; background:var(--sage); color:#fff; margin-left:6px;">linked</span>` : "";
+    div.innerHTML = `
+      <div>
+        <div class="pname">${escapeHtml(c.product_name || c.brand)}${linkedBadge}</div>
+        <div class="pmeta">${escapeHtml(c.brand)}${meta ? " · "+escapeHtml(meta) : ""}</div>
+      </div>
+      <div style="display:flex; align-items:flex-start;">
+        <button class="sync-btn" style="font-family:'IBM Plex Mono', monospace; font-size:10px; padding:6px 10px; border-radius:6px; border:1px solid var(--clay-line); background:${c.calendar_event_id ? 'var(--sage)' : 'var(--paper)'}; color:${c.calendar_event_id ? '#fff' : 'var(--ink-soft)'}; cursor:pointer; white-space:nowrap;">
+          ${c.calendar_event_id ? "✓ synced" : "Sync"}
+        </button>
+      </div>
+    `;
+    div.querySelector(".sync-btn").onclick = ()=>syncToCalendar(c);
+    wrap.appendChild(div);
+  });
+}
+
 /* ---------------- init ---------------- */
 startScanner();
 loadBrandTypeLists();
+initGoogle();
 </script>
 </body>
 </html>
