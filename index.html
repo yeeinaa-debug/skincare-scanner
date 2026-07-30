@@ -223,6 +223,9 @@
     text-transform:uppercase;
     color:var(--ink-soft);
     margin-bottom:6px;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
   }
   .field input[type=text],
   .field input[type=number],
@@ -553,28 +556,33 @@
       </div>
       <div class="field">
         <label>Produk / item endorse</label>
-        <input type="text" id="c-product" list="product-list" placeholder="ketik/pilih dari koleksi, atau nama baru" />
-        <datalist id="product-list"></datalist>
+        <select id="c-product-select">
+          <option value="">— pilih dari koleksi —</option>
+          <option value="__new__">+ nama baru (belum ada di koleksi)</option>
+        </select>
+        <input type="text" id="c-product-new" placeholder="ketik nama produk baru" style="margin-top:8px; display:none;" />
       </div>
       <div class="row2">
         <div class="field">
           <label>Platform</label>
-          <input type="text" id="c-platform" placeholder="cth. Instagram Reels" />
+          <select id="c-platform">
+            <option value="Reels">Reels</option>
+            <option value="TikTok">TikTok</option>
+            <option value="Short">Short</option>
+          </select>
         </div>
         <div class="field">
           <label>Status</label>
           <select id="c-status">
-            <option>Received</option>
-            <option>Planned</option>
-            <option>Filmed</option>
-            <option>Posted</option>
-            <option>Paid</option>
+            <option>Shipping</option>
+            <option>Producing</option>
+            <option>Published</option>
           </select>
         </div>
       </div>
       <div class="row2">
         <div class="field">
-          <label>Tanggal terima barang</label>
+          <label>Diterima</label>
           <input type="date" id="c-received" />
         </div>
         <div class="field">
@@ -586,6 +594,19 @@
         <label>Tanggal posting</label>
         <input type="date" id="c-post" />
       </div>
+      <div class="row2">
+        <div class="field">
+          <label>Dibayar?</label>
+          <div class="seg">
+            <button type="button" class="seg-paid" data-v="false">Non-paid</button>
+            <button type="button" class="seg-paid" data-v="true">Paid</button>
+          </div>
+        </div>
+        <div class="field" id="fee-field" style="display:none;">
+          <label>Fee (Rp)</label>
+          <input type="number" id="c-fee" placeholder="0" min="0" />
+        </div>
+      </div>
       <div class="field">
         <label>Catatan</label>
         <input type="text" id="c-notes" placeholder="opsional" />
@@ -594,6 +615,7 @@
       <div class="toast" id="collab-toast"></div>
     </div>
 
+    <div class="stats-strip" id="collab-stats"></div>
     <div class="product-list" id="collab-list"></div>
   </section>
 
@@ -855,12 +877,15 @@ async function loadBrandTypeLists(){
   document.getElementById("type-list").innerHTML = types.map(t=>`<option value="${t}">`).join("");
 
   productNameMap = {};
-  data.forEach(p=>{
-    if(p.product_name) productNameMap[p.product_name.toLowerCase()] = { id:p.id, brand:p.brand };
-  });
-  const productListEl = document.getElementById("product-list");
+  const productListEl = document.getElementById("c-product-select");
   if(productListEl){
-    productListEl.innerHTML = data.filter(p=>p.product_name).map(p=>`<option value="${p.product_name}">`).join("");
+    const existingOptions = data.filter(p=>p.product_name).map(p=>{
+      productNameMap[p.product_name.toLowerCase()] = { id:p.id, brand:p.brand };
+      return `<option value="${escapeHtml(p.product_name)}">${escapeHtml(p.product_name)}</option>`;
+    }).join("");
+    productListEl.innerHTML = `<option value="">— pilih dari koleksi —</option>` + existingOptions + `<option value="__new__">+ nama baru (belum ada di koleksi)</option>`;
+  } else {
+    data.forEach(p=>{ if(p.product_name) productNameMap[p.product_name.toLowerCase()] = { id:p.id, brand:p.brand }; });
   }
 }
 
@@ -1084,13 +1109,32 @@ async function syncToCalendar(collab){
 }
 
 /* ---------------- collabs CRUD ---------------- */
-document.getElementById("c-product").addEventListener("change", ()=>{
-  const val = document.getElementById("c-product").value.trim().toLowerCase();
-  const match = productNameMap[val];
-  if(match && !document.getElementById("c-brand").value.trim()){
-    document.getElementById("c-brand").value = match.brand || "";
+document.getElementById("c-product-select").addEventListener("change", ()=>{
+  const val = document.getElementById("c-product-select").value;
+  const newInput = document.getElementById("c-product-new");
+  if(val === "__new__"){
+    newInput.style.display = "block";
+    newInput.value = "";
+    newInput.focus();
+  } else {
+    newInput.style.display = "none";
+    const match = productNameMap[val.toLowerCase()];
+    if(match && !document.getElementById("c-brand").value.trim()){
+      document.getElementById("c-brand").value = match.brand || "";
+    }
   }
 });
+
+let paidValue = false;
+document.querySelectorAll(".seg-paid").forEach(b=>{
+  b.onclick = ()=>{
+    document.querySelectorAll(".seg-paid").forEach(x=>x.classList.remove("picked"));
+    b.classList.add("picked");
+    paidValue = b.dataset.v === "true";
+    document.getElementById("fee-field").style.display = paidValue ? "block" : "none";
+  };
+});
+document.querySelector('.seg-paid[data-v="false"]').classList.add("picked");
 
 document.getElementById("collab-save-btn").onclick = async ()=>{
   const brand = document.getElementById("c-brand").value.trim();
@@ -1099,18 +1143,23 @@ document.getElementById("collab-save-btn").onclick = async ()=>{
     document.getElementById("collab-toast").textContent = "brand wajib diisi ya";
     return;
   }
-  const productNameVal = document.getElementById("c-product").value.trim();
+  const selectVal = document.getElementById("c-product-select").value;
+  const productNameVal = selectVal === "__new__"
+    ? document.getElementById("c-product-new").value.trim()
+    : selectVal;
   const matchedProduct = productNameMap[productNameVal.toLowerCase()];
   const payload = {
     brand,
     product_name: productNameVal || null,
     product_id: matchedProduct ? matchedProduct.id : null,
-    platform: document.getElementById("c-platform").value.trim() || null,
+    platform: document.getElementById("c-platform").value,
     status: document.getElementById("c-status").value,
     received_date: document.getElementById("c-received").value || null,
     content_deadline: document.getElementById("c-deadline").value || null,
     post_date: document.getElementById("c-post").value || null,
-    notes: document.getElementById("c-notes").value.trim() || null
+    notes: document.getElementById("c-notes").value.trim() || null,
+    paid: paidValue,
+    fee: paidValue ? (Number(document.getElementById("c-fee").value) || null) : null
   };
   const { error } = await sb.from("collabs").insert(payload);
   const toast = document.getElementById("collab-toast");
@@ -1120,8 +1169,15 @@ document.getElementById("collab-save-btn").onclick = async ()=>{
   } else {
     toast.style.color = "#7C8B6F";
     toast.textContent = "✓ collab tersimpan";
-    ["c-brand","c-product","c-platform","c-received","c-deadline","c-post","c-notes"].forEach(id=>document.getElementById(id).value="");
-    document.getElementById("c-status").value = "Received";
+    ["c-brand","c-received","c-deadline","c-post","c-notes","c-fee"].forEach(id=>document.getElementById(id).value="");
+    document.getElementById("c-product-select").value = "";
+    document.getElementById("c-product-new").style.display = "none";
+    document.getElementById("c-status").value = "Shipping";
+    document.getElementById("c-platform").value = "Reels";
+    document.querySelectorAll(".seg-paid").forEach(x=>x.classList.remove("picked"));
+    document.querySelector('.seg-paid[data-v="false"]').classList.add("picked");
+    paidValue = false;
+    document.getElementById("fee-field").style.display = "none";
     loadCollabs();
   }
 };
@@ -1135,18 +1191,38 @@ async function loadCollabs(){
     return;
   }
   if(!data || !data.length){
+    document.getElementById("collab-stats").innerHTML = "";
     wrap.innerHTML = `<div class="empty">belum ada collab dicatat</div>`;
     return;
   }
+
+  // stats: income this month, based on post_date's month
+  const now = new Date();
+  const thisMonthPaid = data.filter(c=>{
+    if(!c.paid || !c.fee || !c.post_date) return false;
+    const d = new Date(c.post_date);
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  });
+  const incomeThisMonth = thisMonthPaid.reduce((sum,c)=>sum + Number(c.fee||0), 0);
+  const totalCollabs = data.length;
+  const publishedCount = data.filter(c=>c.status === "Published").length;
+
+  document.getElementById("collab-stats").innerHTML = `
+    <div class="stat"><b>${totalCollabs}</b><span>total collab</span></div>
+    <div class="stat"><b>${publishedCount}</b><span>published</span></div>
+    <div class="stat"><b>Rp${incomeThisMonth.toLocaleString("id-ID")}</b><span>income bln ini</span></div>
+  `;
+
   wrap.innerHTML = "";
   data.forEach(c=>{
     const div = document.createElement("div");
     div.className = "product";
     const meta = [c.platform, c.status, c.post_date ? "post: "+c.post_date : null].filter(Boolean).join(" · ");
     const linkedBadge = c.product_id ? `<span style="font-family:'IBM Plex Mono', monospace; font-size:9.5px; padding:2px 7px; border-radius:5px; background:var(--sage); color:#fff; margin-left:6px;">linked</span>` : "";
+    const paidBadge = c.paid ? `<span style="font-family:'IBM Plex Mono', monospace; font-size:9.5px; padding:2px 7px; border-radius:5px; background:var(--amber); color:#fff; margin-left:6px;">Rp${Number(c.fee||0).toLocaleString("id-ID")}</span>` : "";
     div.innerHTML = `
       <div>
-        <div class="pname">${escapeHtml(c.product_name || c.brand)}${linkedBadge}</div>
+        <div class="pname">${escapeHtml(c.product_name || c.brand)}${linkedBadge}${paidBadge}</div>
         <div class="pmeta">${escapeHtml(c.brand)}${meta ? " · "+escapeHtml(meta) : ""}</div>
       </div>
       <div style="display:flex; align-items:flex-start;">
