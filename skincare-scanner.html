@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Skincare Scanner</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap');
+  :root {
+    --cream: #FAF7F2; --sage: #8FAF8A; --sage-light: #C8DEC5;
+    --sage-dark: #4A7A44; --text: #2A2420; --muted: #9A8E87;
+    --white: #FFFFFF; --error: #C0392B; --warn: #E67E22;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'DM Sans',sans-serif; background:var(--cream); color:var(--text); min-height:100vh; display:flex; flex-direction:column; align-items:center; padding:0 0 80px; }
+
+  header { width:100%; padding:24px 24px 14px; text-align:center; background:var(--cream); position:sticky; top:0; z-index:100; border-bottom:1px solid rgba(143,175,138,0.2); }
+  header h1 { font-family:'DM Serif Display',serif; font-size:22px; color:var(--text); }
+  header p { font-size:11px; color:var(--muted); margin-top:3px; }
+  .lang-toggle { display:flex; gap:6px; justify-content:center; margin-top:10px; }
+  .lang-btn { padding:4px 14px; border-radius:99px; border:1.5px solid var(--sage-light); background:transparent; font-family:'DM Sans',sans-serif; font-size:12px; font-weight:500; color:var(--muted); cursor:pointer; transition:all 0.15s; }
+  .lang-btn.active { background:var(--sage-dark); border-color:var(--sage-dark); color:white; }
+
+  .container { width:100%; max-width:480px; padding:20px 18px; display:flex; flex-direction:column; gap:14px; }
+
+  .input-btns { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .input-btn { padding:18px 10px; border:2px dashed var(--sage-light); border-radius:14px; background:var(--white); text-align:center; cursor:pointer; transition:all 0.2s; position:relative; }
+  .input-btn:active { background:#F4FAF3; }
+  .input-btn input { position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%; }
+  .input-btn .icon { font-size:26px; margin-bottom:6px; }
+  .input-btn .label { font-size:13px; font-weight:500; color:var(--text); }
+  .input-btn .sub { font-size:11px; color:var(--muted); margin-top:2px; }
+
+  .preview-wrap { position:relative; border-radius:14px; overflow:hidden; background:var(--white); display:none; }
+  .preview-wrap img { width:100%; max-height:260px; object-fit:cover; display:block; }
+  .clear-btn { position:absolute; top:10px; right:10px; background:rgba(0,0,0,0.5); color:white; border:none; border-radius:50%; width:28px; height:28px; cursor:pointer; font-size:13px; display:flex; align-items:center; justify-content:center; }
+
+  .scan-btn { width:100%; padding:16px; background:var(--sage-dark); color:white; border:none; border-radius:14px; font-family:'DM Sans',sans-serif; font-size:15px; font-weight:500; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; transition:all 0.2s; }
+  .scan-btn:disabled { background:var(--muted); cursor:not-allowed; }
+
+  .loading { display:none; text-align:center; padding:24px; background:var(--white); border-radius:14px; }
+  .spinner { width:34px; height:34px; border:3px solid var(--sage-light); border-top-color:var(--sage-dark); border-radius:50%; animation:spin 0.8s linear infinite; margin:0 auto 10px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .loading p { font-size:13px; color:var(--muted); }
+  .loading .step { font-size:12px; color:var(--sage-dark); margin-top:4px; font-weight:500; }
+
+  /* Warning duplicate */
+  .warn-msg { display:none; background:#FEF9EC; border:1px solid #F9E4B0; border-radius:12px; padding:12px 16px; font-size:13px; color:var(--warn); }
+
+  /* Edit form */
+  .edit-form { display:none; background:var(--white); border-radius:14px; overflow:hidden; box-shadow:0 4px 20px rgba(0,0,0,0.06); }
+  .edit-header { background:var(--sage-dark); color:white; padding:14px 18px; font-size:13px; font-weight:500; }
+  .edit-body { padding:16px; display:flex; flex-direction:column; gap:12px; }
+  .field-group { display:flex; flex-direction:column; gap:4px; }
+  .field-label { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); font-weight:500; }
+  .field-input { width:100%; padding:10px 12px; border:1.5px solid #E8E3DC; border-radius:10px; font-family:'DM Sans',sans-serif; font-size:13px; color:var(--text); background:var(--cream); outline:none; }
+  .field-input:focus { border-color:var(--sage); }
+  select.field-input { cursor:pointer; }
+
+  /* Skin concern checkboxes */
+  .concern-grid { display:flex; flex-wrap:wrap; gap:6px; }
+  .concern-chip { padding:5px 12px; border-radius:99px; border:1.5px solid #E8E3DC; background:var(--cream); font-size:12px; font-weight:500; color:var(--muted); cursor:pointer; transition:all 0.15s; user-select:none; }
+  .concern-chip.selected { background:var(--sage-light); border-color:var(--sage); color:var(--sage-dark); }
+
+  /* Date input */
+  .date-wrap { display:flex; gap:8px; align-items:center; }
+  .date-wrap input[type="text"] { flex:1; }
+  .date-wrap input[type="date"] { flex:1; padding:10px 12px; border:1.5px solid #E8E3DC; border-radius:10px; font-family:'DM Sans',sans-serif; font-size:13px; color:var(--text); background:var(--cream); outline:none; }
+  .date-wrap input[type="date"]:focus { border-color:var(--sage); }
+
+  .notion-btn { width:100%; padding:15px; background:var(--text); color:white; border:none; border-radius:14px; font-family:'DM Sans',sans-serif; font-size:14px; font-weight:500; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; transition:all 0.2s; }
+  .notion-btn:disabled { background:var(--muted); cursor:not-allowed; }
+
+  .success-msg { display:none; background:#EDF7EC; border:1px solid var(--sage-light); border-radius:14px; padding:14px 18px; text-align:center; color:var(--sage-dark); font-size:13px; font-weight:500; }
+  .error-msg { display:none; background:#FEF0EE; border:1px solid #F5C6C0; border-radius:14px; padding:14px 18px; text-align:center; color:var(--error); font-size:12px; }
+  .scan-again-btn { width:100%; padding:13px; background:transparent; color:var(--sage-dark); border:1.5px solid var(--sage-light); border-radius:14px; font-family:'DM Sans',sans-serif; font-size:13px; font-weight:500; cursor:pointer; display:none; }
+  .field-label-row { display:flex; align-items:center; justify-content:space-between; }
+  .refresh-btn { background:none; border:none; cursor:pointer; font-size:13px; color:var(--muted); padding:0; line-height:1; transition:transform 0.3s; }
+  .refresh-btn:active { transform:rotate(180deg); }
+  .refresh-btn.spinning { animation:spin 0.6s linear; }
+
+  /* Searchable brand dropdown */
+  .brand-wrap { position:relative; }
+  .brand-search { width:100%; padding:10px 12px; border:1.5px solid #E8E3DC; border-radius:10px; font-family:'DM Sans',sans-serif; font-size:13px; color:var(--text); background:var(--cream); outline:none; }
+  .brand-search:focus { border-color:var(--sage); }
+  .brand-dropdown { display:none; position:absolute; top:100%; left:0; right:0; background:var(--white); border:1.5px solid var(--sage-light); border-radius:10px; max-height:200px; overflow-y:auto; z-index:50; box-shadow:0 4px 16px rgba(0,0,0,0.1); margin-top:4px; }
+  .brand-dropdown.open { display:block; }
+  .brand-option { padding:10px 14px; font-size:13px; cursor:pointer; color:var(--text); }
+  .brand-option:hover, .brand-option.highlighted { background:#F4FAF3; }
+  .brand-option.add-new { color:var(--sage-dark); font-weight:500; border-top:1px solid #E8E3DC; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🌿 Skincare Scanner</h1>
+  <p id="headerSub">Foto produk → otomatis masuk Notion</p>
+  <div class="lang-toggle">
+    <button class="lang-btn active" onclick="setLang('id')">🇮🇩 ID</button>
+    <button class="lang-btn" onclick="setLang('en')">🇬🇧 EN</button>
+    <button class="lang-btn" onclick="setLang('ko')">🇰🇷 KR</button>
+  </div>
+</header>
+
+<div class="container">
+  <div class="input-btns" id="inputBtns">
+    <div class="input-btn">
+      <input type="file" id="cameraInput" accept="image/*" capture="environment">
+      <div class="icon">📸</div>
+      <div class="label" id="lblCamera">Kamera</div>
+      <div class="sub" id="lblCameraSub">Foto langsung</div>
+    </div>
+    <div class="input-btn">
+      <input type="file" id="galleryInput" accept="image/*">
+      <div class="icon">🖼️</div>
+      <div class="label" id="lblGallery">Galeri</div>
+      <div class="sub" id="lblGallerySub">Upload dari galeri</div>
+    </div>
+  </div>
+
+  <div class="preview-wrap" id="previewWrap">
+    <img id="previewImg" src="" alt="Preview">
+    <button class="clear-btn" id="clearBtn">✕</button>
+  </div>
+
+  <button class="scan-btn" id="scanBtn" disabled>
+    <span>✨</span> <span id="lblScan">Scan Produk</span>
+  </button>
+
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <p id="lblLoading">Memproses gambar...</p>
+    <div class="step" id="loadingStep">Membaca produk dengan AI</div>
+  </div>
+
+  <div class="error-msg" id="errorMsg"></div>
+  <div class="warn-msg" id="warnMsg"></div>
+
+  <!-- Edit form (shown after scan) -->
+  <div class="edit-form" id="editForm">
+    <div class="edit-header" id="lblEditHeader">✅ Cek & Edit sebelum simpan</div>
+    <div class="edit-body">
+
+      <div class="field-group">
+        <div class="field-label" id="lblFldName">Nama Produk</div>
+        <input class="field-input" type="text" id="fldName">
+      </div>
+
+      <div class="field-group">
+        <div class="field-label-row">
+          <div class="field-label" id="lblFldBrand">Brand</div>
+          <button class="refresh-btn" onclick="refreshOptions('brand')" title="Refresh">🔄</button>
+        </div>
+        <div class="brand-wrap">
+          <input class="brand-search" type="text" id="fldBrandSearch" placeholder="Cari atau tambah brand..." autocomplete="off">
+          <input type="hidden" id="fldBrand" value="">
+          <div class="brand-dropdown" id="brandDropdown"></div>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <div class="field-label-row">
+          <div class="field-label" id="lblFldType">Tipe</div>
+          <button class="refresh-btn" onclick="refreshOptions('type')" title="Refresh">🔄</button>
+        </div>
+        <select class="field-input" id="fldType">
+          <option value="">— loading —</option>
+        </select>
+      </div>
+
+      <div class="field-group">
+        <div class="field-label" id="lblFldConcern">Skin Concern</div>
+        <div class="concern-grid" id="concernGrid"></div>
+      </div>
+
+      <div class="field-group">
+        <div class="field-label-row">
+          <div class="field-label" id="lblFldPlace">Lokasi</div>
+          <button class="refresh-btn" onclick="refreshOptions('place')" title="Refresh">🔄</button>
+        </div>
+        <select class="field-input" id="fldPlace">
+          <option value="">— loading —</option>
+        </select>
+      </div>
+
+      <div class="field-group">
+        <div class="field-label-row">
+          <div class="field-label" id="lblFldCondition">Kondisi</div>
+          <button class="refresh-btn" onclick="refreshOptions('condition')" title="Refresh">🔄</button>
+        </div>
+        <select class="field-input" id="fldCondition">
+          <option value="">— loading —</option>
+        </select>
+      </div>
+
+      <div class="field-group">
+        <div class="field-label" id="lblFldAmount">Jumlah</div>
+        <input class="field-input" type="number" id="fldAmount" placeholder="1" min="0" value="1">
+      </div>
+
+      <div class="field-group">
+        <div class="field-label" id="lblFldExpired">Expired (YYYYMMDD)</div>
+        <div class="date-wrap">
+          <input class="field-input" type="text" id="fldExpiredText" placeholder="20261231" maxlength="8" inputmode="numeric" pattern="[0-9]*">
+          <input type="date" id="fldExpiredPicker" title="Pilih tanggal">
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <button class="notion-btn" id="notionBtn" style="display:none">
+    <span>📋</span> <span id="lblSaveNotion">Simpan ke Notion</span>
+  </button>
+
+  <div class="success-msg" id="successMsg">✅ <span id="lblSuccess">Berhasil ditambahkan ke Notion!</span></div>
+  <button class="scan-again-btn" id="scanAgainBtn">+ Scan produk lain</button>
+</div>
+
+<script>
+const WORKER_URL = 'https://skincare-scanner.yeeinaa.workers.dev';
+
+const ALL_CONCERNS = ['Sensitive Skin','Dry Skin','Oily Skin','Redness','Acne','Anti-Aging','Brightening','Pores','Wrinkles'];
+
+const LANGS = {
+  id: {
+    sub:'Foto produk → otomatis masuk Notion', camera:'Kamera', cameraSub:'Foto langsung',
+    gallery:'Galeri', gallerySub:'Upload foto', scan:'Scan Produk',
+    loading:'Memproses gambar...', loadingStep:'Mencari info produk...',
+    editHeader:'✅ Cek & Edit sebelum simpan',
+    fldName:'Nama Produk', fldBrand:'Brand', brandPlaceholder:'Cari atau tambah brand...', fldType:'Tipe',
+    fldConcern:'Skin Concern', fldPlace:'Lokasi', fldCondition:'Kondisi', fldExpired:'Expired (YYYYMMDD)', fldAmount:'Jumlah',
+    saveNotion:'Simpan ke Notion', saving:'⏳ Menyimpan...',
+    success:'Berhasil ditambahkan ke Notion!', scanAgain:'+ Scan produk lain',
+    warnDupe:'Sepertinya ada produk serupa di database:', errNotion:'Gagal simpan: ', retry:'Coba Lagi',
+  },
+  en: {
+    sub:'Photo product → auto save to Notion', camera:'Camera', cameraSub:'Take photo',
+    gallery:'Gallery', gallerySub:'Upload photo', scan:'Scan Product',
+    loading:'Processing image...', loadingStep:'Looking up product info...',
+    editHeader:'✅ Review & Edit before saving',
+    fldName:'Product Name', fldBrand:'Brand', brandPlaceholder:'Search or add brand...', fldType:'Type',
+    fldConcern:'Skin Concern', fldPlace:'Location', fldCondition:'Condition', fldExpired:'Expired (YYYYMMDD)', fldAmount:'Amount',
+    saveNotion:'Save to Notion', saving:'⏳ Saving...',
+    success:'Successfully added to Notion!', scanAgain:'+ Scan another product',
+    warnDupe:'Looks like there\'s a similar product in your database:', errNotion:'Failed to save: ', retry:'Retry',
+  },
+  ko: {
+    sub:'제품 사진 → 자동으로 Notion에 저장', camera:'카메라', cameraSub:'사진 찍기',
+    gallery:'업로드', gallerySub:'갤러리에서 업로드', scan:'제품 스캔',
+    loading:'이미지 처리 중...', loadingStep:'제품 정보 검색 중...',
+    editHeader:'✅ 저장 전 확인 & 수정',
+    fldName:'제품명', fldBrand:'브랜드', brandPlaceholder:'브랜드 검색 또는 추가...', fldType:'타입',
+    fldConcern:'피부 고민', fldPlace:'위치', fldCondition:'상태', fldExpired:'유통기한 (YYYYMMDD)', fldAmount:'수량',
+    saveNotion:'Notion에 저장', saving:'⏳ 저장 중...',
+    success:'Notion에 성공적으로 추가되었습니다!', scanAgain:'+ 다른 제품 스캔',
+    warnDupe:'데이터베이스에 비슷한 제품이 있는 것 같습니다:', errNotion:'저장 실패: ', retry:'다시 시도',
+  }
+};
+
+let lang = 'id';
+let currentFile = null;
+let selectedConcerns = [];
+
+function t(k) { return LANGS[lang][k]; }
+
+function setLang(l) {
+  lang = l;
+  document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector(`.lang-btn[onclick="setLang('${l}')"]`).classList.add('active');
+  const tx = LANGS[l];
+  document.getElementById('headerSub').textContent = tx.sub;
+  document.getElementById('lblCamera').textContent = tx.camera;
+  document.getElementById('lblCameraSub').textContent = tx.cameraSub;
+  document.getElementById('lblGallery').textContent = tx.gallery;
+  document.getElementById('lblGallerySub').textContent = tx.gallerySub;
+  document.getElementById('lblScan').textContent = tx.scan;
+  document.getElementById('lblLoading').textContent = tx.loading;
+  document.getElementById('loadingStep').textContent = tx.loadingStep;
+  document.getElementById('lblEditHeader').textContent = tx.editHeader;
+  document.getElementById('lblFldName').textContent = tx.fldName;
+  document.getElementById('lblFldBrand').textContent = tx.fldBrand;
+  document.getElementById('fldBrandSearch').placeholder = tx.brandPlaceholder;
+  document.getElementById('lblFldType').textContent = tx.fldType;
+  document.getElementById('lblFldConcern').textContent = tx.fldConcern;
+  document.getElementById('lblFldPlace').textContent = tx.fldPlace;
+  document.getElementById('lblFldExpired').textContent = tx.fldExpired;
+  document.getElementById('lblFldCondition').textContent = tx.fldCondition;
+  document.getElementById('lblFldAmount').textContent = tx.fldAmount;
+  document.getElementById('lblScan').textContent = tx.scan;
+  document.getElementById('lblSaveNotion').textContent = tx.saveNotion;
+  document.getElementById('lblSuccess').textContent = tx.success;
+  document.getElementById('scanAgainBtn').textContent = tx.scanAgain;
+  // Re-render warn message in new language if visible
+  const warnEl = document.getElementById('warnMsg');
+  if (warnEl.style.display !== 'none' && warnEl.dataset.similar) {
+    warnEl.textContent = '⚠️ ' + tx.warnDupe + ' ' + warnEl.dataset.similar;
+  }
+}
+
+// Build concern chips
+function buildConcernChips(selected) {
+  selectedConcerns = selected || [];
+  const grid = document.getElementById('concernGrid');
+  grid.innerHTML = '';
+  ALL_CONCERNS.forEach(c => {
+    const chip = document.createElement('div');
+    chip.className = 'concern-chip' + (selectedConcerns.includes(c) ? ' selected' : '');
+    chip.textContent = c;
+    chip.onclick = () => {
+      if (selectedConcerns.includes(c)) {
+        selectedConcerns = selectedConcerns.filter(x => x !== c);
+        chip.classList.remove('selected');
+      } else {
+        selectedConcerns.push(c);
+        chip.classList.add('selected');
+      }
+    };
+    grid.appendChild(chip);
+  });
+}
+
+// Date sync: text <-> picker
+document.getElementById('fldExpiredText').addEventListener('input', e => {
+  let v = e.target.value.replace(/[^0-9]/g, '').slice(0, 8);
+  e.target.value = v;
+  // Auto format when 8 digits: 20250426 -> sync picker
+  if (v.length === 8) {
+    const y = v.slice(0,4), mo = v.slice(4,6), d = v.slice(6,8);
+    document.getElementById('fldExpiredPicker').value = `${y}-${mo}-${d}`;
+  }
+});
+
+document.getElementById('fldExpiredPicker').addEventListener('change', e => {
+  const v = e.target.value; // YYYY-MM-DD
+  if (v) {
+    const [y,m,d] = v.split('-');
+    document.getElementById('fldExpiredText').value = `${y}${m}${d}`;
+  }
+});
+
+// Searchable brand dropdown
+let allBrands = [];
+let brandSearchActive = false;
+
+function renderBrandDropdown(filter) {
+  const dd = document.getElementById('brandDropdown');
+  const filtered = allBrands.filter(b => b.toLowerCase().includes(filter.toLowerCase()));
+  dd.innerHTML = '';
+
+  filtered.forEach((b, i) => {
+    const div = document.createElement('div');
+    div.className = 'brand-option' + (i === 0 ? ' highlighted' : '');
+    div.textContent = b;
+    div.onmousedown = (e) => {
+      e.preventDefault();
+      selectBrand(b);
+    };
+    dd.appendChild(div);
+  });
+
+  // Add "Add new" option if no exact match
+  if (filter && !allBrands.some(b => b.toLowerCase() === filter.toLowerCase())) {
+    const div = document.createElement('div');
+    div.className = 'brand-option add-new';
+    div.textContent = '+ Tambah "' + filter + '"';
+    div.onmousedown = (e) => {
+      e.preventDefault();
+      selectBrand(filter);
+    };
+    dd.appendChild(div);
+  }
+
+  dd.classList.toggle('open', dd.children.length > 0);
+}
+
+function selectBrand(value) {
+  document.getElementById('fldBrandSearch').value = value;
+  document.getElementById('fldBrand').value = value;
+  document.getElementById('brandDropdown').classList.remove('open');
+}
+
+document.getElementById('fldBrandSearch').addEventListener('input', e => {
+  document.getElementById('fldBrand').value = e.target.value;
+  renderBrandDropdown(e.target.value);
+});
+
+document.getElementById('fldBrandSearch').addEventListener('focus', e => {
+  renderBrandDropdown(e.target.value);
+});
+
+document.getElementById('fldBrandSearch').addEventListener('blur', () => {
+  setTimeout(() => {
+    document.getElementById('brandDropdown').classList.remove('open');
+  }, 150);
+});
+
+// File inputs
+['cameraInput','galleryInput'].forEach(id => {
+  document.getElementById(id).addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    currentFile = file;
+    document.getElementById('previewImg').src = URL.createObjectURL(file);
+    document.getElementById('previewWrap').style.display = 'block';
+    document.getElementById('inputBtns').style.display = 'none';
+    document.getElementById('scanBtn').disabled = false;
+    hide(['errorMsg','warnMsg','editForm','notionBtn','successMsg','scanAgainBtn']);
+  });
+});
+
+document.getElementById('clearBtn').addEventListener('click', resetUpload);
+
+document.getElementById('scanBtn').addEventListener('click', async () => {
+  if (!currentFile) return;
+  hide(['errorMsg','warnMsg','editForm','notionBtn','successMsg','scanAgainBtn']);
+  show(['loading']);
+  document.getElementById('scanBtn').disabled = true;
+  document.getElementById('loadingStep').textContent = t('loadingStep');
+
+  try {
+    const base64 = await compressAndEncode(currentFile);
+    const product = await scanWithClaude(base64);
+
+    // Fill form
+    document.getElementById('fldName').value = product.product_name || '';
+    buildConcernChips(product.skin_concern || []);
+    document.getElementById('fldPlace').value = '';
+    document.getElementById('fldExpiredText').value = '';
+    document.getElementById('fldAmount').value = '1';
+    document.getElementById('fldCondition').value = '';
+    document.getElementById('fldExpiredPicker').value = '';
+
+    // Load dropdowns then set AI values
+    await loadAllOptions();
+    // Set brand
+    if (product.brand) {
+      document.getElementById('fldBrandSearch').value = product.brand;
+      document.getElementById('fldBrand').value = product.brand;
+      if (!allBrands.includes(product.brand)) allBrands.push(product.brand);
+    }
+    // Set type
+    const typeSel = document.getElementById('fldType');
+    const typeExists = [...typeSel.options].some(o => o.value === product.type);
+    if (!typeExists && product.type) {
+      const opt = document.createElement('option');
+      opt.value = product.type; opt.textContent = product.type;
+      typeSel.appendChild(opt);
+    }
+    typeSel.value = product.type || '';
+
+    hide(['loading']);
+    show(['editForm','notionBtn']);
+
+    // Check for duplicates via worker
+    checkDuplicate(product.product_name, product.brand);
+
+  } catch (err) {
+    hide(['loading']);
+    showError(err.message);
+    document.getElementById('scanBtn').disabled = false;
+  }
+});
+
+async function checkDuplicate(name, brand) {
+  try {
+    const res = await fetch(WORKER_URL + '?action=check&brand=' + encodeURIComponent(brand) + '&name=' + encodeURIComponent(name));
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.similar && data.similar.length > 0) {
+      const warnEl = document.getElementById('warnMsg');
+      warnEl.dataset.similar = data.similar.join(', ');
+      warnEl.textContent = '⚠️ ' + t('warnDupe') + ' ' + data.similar.join(', ');
+      warnEl.style.display = 'block';
+    }
+  } catch {}
+}
+
+document.getElementById('notionBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('notionBtn');
+  btn.disabled = true;
+
+  // Animated saving messages
+  const savingMsgs = {
+    id: ['⏳ Menyimpan...', '📡 Menghubungi Notion...', '✍️ Menulis data...', '⏳ Sebentar lagi...'],
+    en: ['⏳ Saving...', '📡 Connecting to Notion...', '✍️ Writing data...', '⏳ Almost done...'],
+    ko: ['⏳ 저장 중...', '📡 Notion 연결 중...', '✍️ 데이터 쓰는 중...', '⏳ 거의 다 됐어요...']
+  };
+  let msgIdx = 0;
+  btn.innerHTML = savingMsgs[lang][0];
+  const msgInterval = setInterval(() => {
+    msgIdx = (msgIdx + 1) % savingMsgs[lang].length;
+    btn.innerHTML = savingMsgs[lang][msgIdx];
+  }, 2000);
+
+  // Get expired value
+  const expiredRaw = document.getElementById('fldExpiredText').value.trim().replace(/[^0-9]/g,'');
+  let expiredISO = null;
+  if (expiredRaw.length === 8) {
+    expiredISO = `${expiredRaw.slice(0,4)}-${expiredRaw.slice(4,6)}-${expiredRaw.slice(6,8)}`;
+  }
+
+  const amountVal = document.getElementById('fldAmount').value;
+  const payload = {
+    product_name: document.getElementById('fldName').value.trim(),
+    brand: document.getElementById('fldBrand').value.trim(),
+    type: document.getElementById('fldType').value,
+    skin_concern: selectedConcerns,
+    place: document.getElementById('fldPlace').value,
+    condition: document.getElementById('fldCondition').value,
+    expired: expiredISO,
+    amount: amountVal ? parseFloat(amountVal) : null
+  };
+
+  try {
+    await addToNotion(payload);
+    clearInterval(msgInterval);
+    hide(['notionBtn']);
+    show(['successMsg','scanAgainBtn']);
+  } catch (err) {
+    clearInterval(msgInterval);
+    showError(t('errNotion') + err.message);
+    btn.disabled = false;
+    btn.innerHTML = '<span>🔄</span> ' + t('retry');
+  }
+});
+
+document.getElementById('scanAgainBtn').addEventListener('click', () => {
+  resetUpload();
+  hide(['editForm','notionBtn','successMsg','scanAgainBtn','errorMsg','warnMsg']);
+});
+
+function resetUpload() {
+  currentFile = null;
+  document.getElementById('cameraInput').value = '';
+  document.getElementById('galleryInput').value = '';
+  document.getElementById('fldBrandSearch').value = '';
+  document.getElementById('fldBrand').value = '';
+  document.getElementById('previewWrap').style.display = 'none';
+  document.getElementById('inputBtns').style.display = 'grid';
+  // Full reset of scan + notion buttons
+  const scanBtn = document.getElementById('scanBtn');
+  scanBtn.disabled = true;
+  scanBtn.innerHTML = '<span>✨</span> <span id="lblScan">' + t('scan') + '</span>';
+  const notionBtn = document.getElementById('notionBtn');
+  notionBtn.disabled = false;
+  notionBtn.innerHTML = '<span>📋</span> <span id="lblSaveNotion">' + t('saveNotion') + '</span>';
+  notionBtn.style.display = 'none';
+}
+
+async function compressAndEncode(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const MAX = 800;
+      let w = img.width, h = img.height;
+      if (w > MAX || h > MAX) {
+        if (w > h) { h = Math.round(h*MAX/w); w = MAX; }
+        else { w = Math.round(w*MAX/h); h = MAX; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', 0.75).split(',')[1]);
+      URL.revokeObjectURL(url);
+    };
+    img.onerror = () => reject(new Error('Failed to load image'));
+    img.src = url;
+  });
+}
+
+// Fetch dropdown options from Notion via Worker
+async function fetchOptions(field, forceRefresh) {
+  try {
+    const url = WORKER_URL + '?action=options&field=' + field + (forceRefresh ? '&refresh=1' : '');
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.options || [];
+  } catch { return []; }
+}
+
+async function refreshOptions(field) {
+  // Find refresh button
+  const fieldLabelMap = { brand: 'lblFldBrand', type: 'lblFldType', place: 'lblFldPlace', condition: 'lblFldCondition' };
+  const labelEl = document.getElementById(fieldLabelMap[field]);
+  const btn = labelEl?.parentElement?.querySelector('.refresh-btn');
+  if (btn) btn.classList.add('spinning');
+
+  const opts = await fetchOptions(field, true); // force refresh
+
+  if (field === 'brand') {
+    allBrands = opts;
+    // Re-render dropdown if open
+    const currentSearch = document.getElementById('fldBrandSearch').value;
+    if (currentSearch) renderBrandDropdown(currentSearch);
+  } else {
+    const selectMap = { type: 'fldType', place: 'fldPlace', condition: 'fldCondition' };
+    const sel = document.getElementById(selectMap[field]);
+    if (sel) {
+      const current = sel.value;
+      sel.innerHTML = '<option value="">— pilih —</option>';
+      opts.forEach(o => {
+        const opt = document.createElement('option');
+        opt.value = o; opt.textContent = o;
+        sel.appendChild(opt);
+      });
+      if (current) sel.value = current;
+    }
+  }
+
+  if (btn) setTimeout(() => btn.classList.remove('spinning'), 600);
+}
+
+async function loadAllOptions(brandValue) {
+  const [brands, types, places, conditions] = await Promise.all([
+    fetchOptions('brand'), fetchOptions('type'), fetchOptions('place'), fetchOptions('condition')
+  ]);
+
+  allBrands = brands;
+  // If brandValue provided, set it
+  if (brandValue) {
+    document.getElementById('fldBrandSearch').value = brandValue;
+    document.getElementById('fldBrand').value = brandValue;
+  }
+
+  const typeSel = document.getElementById('fldType');
+  typeSel.innerHTML = '<option value="">— pilih —</option>';
+  types.forEach(o => {
+    const opt = document.createElement('option');
+    opt.value = o; opt.textContent = o;
+    typeSel.appendChild(opt);
+  });
+
+  const placeSel = document.getElementById('fldPlace');
+  placeSel.innerHTML = '<option value="">— pilih —</option>';
+  places.forEach(o => {
+    const opt = document.createElement('option');
+    opt.value = o; opt.textContent = o;
+    placeSel.appendChild(opt);
+  });
+
+  const condSel = document.getElementById('fldCondition');
+  condSel.innerHTML = '<option value="">— pilih —</option>';
+  conditions.forEach(o => {
+    const opt = document.createElement('option');
+    opt.value = o; opt.textContent = o;
+    condSel.appendChild(opt);
+  });
+}
+
+// Load options when page loads
+window.addEventListener('DOMContentLoaded', () => loadAllOptions());
+
+async function scanWithClaude(base64) {
+  const res = await fetch(WORKER_URL + '?action=scan', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image: base64 })
+  });
+  const data = await res.json();
+  if (!res.ok || data.error) throw new Error(data.error || t('errParse'));
+  return data;
+}
+
+
+async function addToNotion(product) {
+  const fetchPromise = fetch(WORKER_URL, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(product)
+  }).then(async res => {
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Error');
+    }
+    return res;
+  });
+
+  const timeoutPromise = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error(LANGS[lang]?.timeoutMsg || 'Timeout — coba lagi')), 15000)
+  );
+
+  await Promise.race([fetchPromise, timeoutPromise]);
+}
+
+function show(ids) { ids.forEach(id => { const el = document.getElementById(id); if(el) el.style.display='block'; }); }
+function hide(ids) { ids.forEach(id => { const el = document.getElementById(id); if(el) el.style.display='none'; }); }
+function showError(msg) {
+  const el = document.getElementById('errorMsg');
+  el.textContent = '⚠️ ' + msg;
+  el.style.display = 'block';
+}
+</script>
+</body>
+</html>
