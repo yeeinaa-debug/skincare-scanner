@@ -363,6 +363,7 @@
 
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
 <script>
 const WORKER_URL = 'https://skincare-scanner.yeeinaa.workers.dev';
 const ALL_CONCERNS = ['Sensitive Skin','Dry Skin','Oily Skin','Redness','Acne','Anti-Aging','Brightening','Pores','Wrinkles','Hydration','Body Odor','Dark Spots'];
@@ -562,68 +563,61 @@ function skipBarcodeStep() {
   setMode('add');
 }
 
-// ---- BARCODE SCANNER (Native BarcodeDetector) ----
-let barcodeStream = null;
-let barcodeAnimFrame = null;
+// ---- BARCODE SCANNER (html5-qrcode) ----
+let html5QrScanner = null;
 
 async function startBarcodeScanner(context) {
   const area = document.getElementById('barcodeArea');
   area.style.display = 'block';
   area.dataset.context = context;
 
-  // Check support
-  if (!('BarcodeDetector' in window)) {
-    stopBarcodeScanner();
-    alert('Browser kamu tidak support barcode scanner. Ketik barcode manual ya!');
-    return;
+  // Clear previous content and use barcodeVideo div as container
+  const videoEl = document.getElementById('barcodeVideo');
+  videoEl.style.display = 'none';
+  
+  // Create scanner div if not exists
+  let scannerDiv = document.getElementById('html5qr-scanner');
+  if (!scannerDiv) {
+    scannerDiv = document.createElement('div');
+    scannerDiv.id = 'html5qr-scanner';
+    area.insertBefore(scannerDiv, area.querySelector('.barcode-overlay'));
   }
+  scannerDiv.style.display = 'block';
 
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
-    });
-    barcodeStream = stream;
-    const videoEl = document.getElementById('barcodeVideo');
-    videoEl.srcObject = stream;
-    await videoEl.play();
-
-    const detector = new BarcodeDetector({ formats: ['ean_13','ean_8','code_128','code_39','qr_code','upc_a','upc_e','itf','data_matrix'] });
-
-    const scan = async () => {
-      if (!barcodeStream) return;
-      try {
-        const barcodes = await detector.detect(videoEl);
-        if (barcodes.length > 0) {
-          const code = barcodes[0].rawValue;
-          stopBarcodeScanner();
-          const ctx = area.dataset.context;
-          if (ctx === 'search') {
-            document.getElementById('searchBarcodeInput').value = code;
-            searchByBarcode(code);
-          } else if (ctx === 'addStep') {
-            document.getElementById('addBarcodeInput').value = code;
-            checkBarcodeStep();
-          } else {
-            document.getElementById('fldBarcode').value = code;
-          }
-          return;
+    html5QrScanner = new Html5Qrcode('html5qr-scanner');
+    await html5QrScanner.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: { width: 220, height: 120 } },
+      (code) => {
+        stopBarcodeScanner();
+        const ctx = area.dataset.context;
+        if (ctx === 'search') {
+          document.getElementById('searchBarcodeInput').value = code;
+          searchByBarcode(code);
+        } else if (ctx === 'addStep') {
+          document.getElementById('addBarcodeInput').value = code;
+          checkBarcodeStep();
+        } else {
+          document.getElementById('fldBarcode').value = code;
         }
-      } catch {}
-      barcodeAnimFrame = requestAnimationFrame(scan);
-    };
-    barcodeAnimFrame = requestAnimationFrame(scan);
-
+      },
+      () => {} // ignore errors
+    );
   } catch (e) {
     stopBarcodeScanner();
     alert('Kamera tidak bisa diakses: ' + e.message);
   }
 }
 
-function stopBarcodeScanner() {
-  if (barcodeAnimFrame) { cancelAnimationFrame(barcodeAnimFrame); barcodeAnimFrame = null; }
-  if (barcodeStream) { barcodeStream.getTracks().forEach(t => t.stop()); barcodeStream = null; }
-  const videoEl = document.getElementById('barcodeVideo');
-  if (videoEl) videoEl.srcObject = null;
+async function stopBarcodeScanner() {
+  if (html5QrScanner) {
+    try { await html5QrScanner.stop(); } catch {}
+    try { html5QrScanner.clear(); } catch {}
+    html5QrScanner = null;
+  }
+  const scannerDiv = document.getElementById('html5qr-scanner');
+  if (scannerDiv) scannerDiv.style.display = 'none';
   document.getElementById('barcodeArea').style.display = 'none';
 }
 
