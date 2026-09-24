@@ -442,6 +442,7 @@ let currentFile = null;
 let selectedConcerns = [];
 let allBrands = [];
 let currentMode = 'add';
+let pendingBarcode = '';
 let selectedProduct = null;
 let selectedExpOption = null;
 
@@ -548,7 +549,7 @@ async function checkBarcodeStep() {
       document.getElementById('photoStep').style.display = 'block';
       document.getElementById('inputBtns').style.display = 'grid';
       document.getElementById('scanBtn').disabled = true;
-      if (barcode) document.getElementById('fldBarcode').value = barcode;
+      pendingBarcode = barcode || '';
       // Show green hint
       const errEl = document.getElementById('errorMsg');
       errEl.style.cssText = 'background:#EDF7EC;color:#4A7A44;border:1px solid #C8DEC5;border-radius:14px;padding:14px 18px;text-align:center;font-size:12px;display:block;';
@@ -566,6 +567,7 @@ function showModeToggle() {
 }
 
 function skipBarcodeStep() {
+  pendingBarcode = document.getElementById('addBarcodeInput').value.trim() || '';
   document.getElementById('barcodeStep').style.display = 'none';
   showModeToggle();
   setMode('add');
@@ -917,6 +919,9 @@ document.getElementById('scanBtn').addEventListener('click', async () => {
     const base64 = await compressAndEncode(currentFile);
     const product = await scanWithClaude(base64);
 
+    // Save barcode before filling form (may have been pre-filled from barcode step)
+    const savedBarcode = pendingBarcode || document.getElementById('fldBarcode').value || '';
+
     document.getElementById('fldName').value = product.product_name || '';
     buildConcernChips(product.skin_concern || []);
     document.getElementById('fldPlace').value = '';
@@ -924,7 +929,7 @@ document.getElementById('scanBtn').addEventListener('click', async () => {
     document.getElementById('fldAmount').value = '1';
     document.getElementById('fldCondition').value = '';
     document.getElementById('fldExpiredPicker').value = '';
-    document.getElementById('fldBarcode').value = '';
+    document.getElementById('fldBarcode').value = savedBarcode; // restore barcode
 
     await loadAllOptions();
 
@@ -1011,6 +1016,7 @@ document.getElementById('notionBtn').addEventListener('click', async () => {
     );
     await Promise.race([fetchPromise, timeoutPromise]);
     clearInterval(msgInterval);
+    pendingBarcode = '';
     hide(['notionBtn']);
     show(['successMsg','scanAgainBtn']);
   } catch (err) {
