@@ -792,7 +792,6 @@ function showAddForm() {
     document.querySelectorAll('.exp-option').forEach(d => d.classList.remove('selected'));
     newDiv.classList.add('selected');
     selectedExpOption = { type: 'new' };
-    // Show input for new date
     let ni = document.getElementById('newExpInput');
     if (!ni) {
       ni = document.createElement('div');
@@ -804,6 +803,23 @@ function showAddForm() {
     ni.style.display = 'block';
   };
   opts.appendChild(newDiv);
+
+  // Add qty input
+  let qtyWrap = document.getElementById('addQtyWrap');
+  if (!qtyWrap) {
+    qtyWrap = document.createElement('div');
+    qtyWrap.id = 'addQtyWrap';
+    qtyWrap.style.marginTop = '12px';
+    qtyWrap.innerHTML = `<div class="field-label" style="margin-bottom:4px">Tambah berapa?</div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button onclick="changeAddQty(-1)" style="width:36px;height:36px;border-radius:50%;border:1.5px solid var(--sage-light);background:white;font-size:18px;cursor:pointer;">−</button>
+        <input id="addQtyInput" type="number" value="1" min="1" style="width:60px;text-align:center;padding:8px;border:1.5px solid #E8E3DC;border-radius:10px;font-size:15px;font-weight:600;">
+        <button onclick="changeAddQty(1)" style="width:36px;height:36px;border-radius:50%;border:1.5px solid var(--sage-light);background:white;font-size:18px;cursor:pointer;">+</button>
+      </div>`;
+    opts.appendChild(qtyWrap);
+  }
+  qtyWrap.style.display = 'block';
+  document.getElementById('addQtyInput').value = 1;
 }
 
 async function confirmAdd() {
@@ -811,12 +827,17 @@ async function confirmAdd() {
   const btn = document.getElementById('lblConfirmAdd');
   btn.textContent = '⏳...';
 
+  // Get qty to add
+  const addQtyEl = document.getElementById('addQtyInput');
+  const addQty = parseInt(addQtyEl?.value || '1') || 1;
+
   try {
     if (selectedExpOption.type === 'same') {
       // Add qty to existing entry
-      await updateProduct(selectedProduct.id, { amount: (selectedProduct.amount || 0) + 1 });
-      selectedProduct.amount = (selectedProduct.amount || 0) + 1;
-      document.getElementById('actionQty').textContent = selectedProduct.amount;
+      const newAmount = (selectedProduct.amount || 0) + addQty;
+      await updateProduct(selectedProduct.id, { amount: newAmount });
+      selectedProduct.amount = newAmount;
+      document.getElementById('actionQty').textContent = newAmount;
     } else {
       // Create new entry with new expired date
       const newExp = document.getElementById('newExpDate')?.value || '';
@@ -830,7 +851,7 @@ async function confirmAdd() {
         place: selectedProduct.place,
         condition: selectedProduct.condition,
         expired: expISO,
-        amount: 1,
+        amount: addQty,
         barcode: selectedProduct.barcode,
         status: 'Active'
       };
@@ -839,7 +860,8 @@ async function confirmAdd() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      if (!res.ok) throw new Error('Save failed');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Save failed');
     }
     document.getElementById('addSubForm').style.display = 'none';
     show(['actionSuccess']);
@@ -865,6 +887,12 @@ async function doAction(type) {
   } catch (e) {
     alert(e.message);
   }
+}
+
+function changeAddQty(delta) {
+  const el = document.getElementById('addQtyInput');
+  if (!el) return;
+  el.value = Math.max(1, (parseInt(el.value) || 1) + delta);
 }
 
 async function updateProduct(pageId, updates) {
@@ -1238,6 +1266,7 @@ async function loadInventory(forceRefresh) {
     }
     allInventory = allPages;
     hide(['invLoading']);
+    document.getElementById('invList').style.display = 'flex';
     filterInventory();
   } catch(e) {
     hide(['invLoading']);
@@ -1280,11 +1309,13 @@ function filterInventory() {
   });
 
   document.getElementById('invCount').textContent = filtered.length + ' produk';
+  document.getElementById('invList').style.display = 'flex';
   renderInventory(filtered);
 }
 
 function renderInventory(items) {
   const list = document.getElementById('invList');
+  list.style.display = 'flex';
   list.innerHTML = '';
   if (items.length === 0) {
     list.innerHTML = '<div style="text-align:center;color:var(--muted);padding:32px;font-size:13px;">Tidak ada produk</div>';
