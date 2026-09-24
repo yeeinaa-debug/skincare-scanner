@@ -156,6 +156,17 @@
 
 <div class="container">
 
+  <!-- Barcode camera (shared) -->
+<!-- Barcode camera -->
+  <div class="barcode-area" id="barcodeArea">
+    <video id="barcodeVideo" autoplay muted playsinline></video>
+    <div class="barcode-overlay">
+    <div class="barcode-frame"></div>
+    </div>
+    <div class="barcode-hint" id="lblBarcodeHint">Arahkan kamera ke barcode</div>
+    <button class="barcode-stop" onclick="stopBarcodeScanner()" id="lblBarcodeStop">Batal</button>
+  </div>
+
   <!-- LANDING: Barcode scan -->
   <div id="barcodeStep">
     <div style="text-align:center;padding:8px 0 4px;">
@@ -295,15 +306,7 @@
       </div>
     </div>
 
-    <!-- Barcode camera -->
-    <div class="barcode-area" id="barcodeArea">
-      <video id="barcodeVideo" autoplay muted playsinline></video>
-      <div class="barcode-overlay">
-        <div class="barcode-frame"></div>
-      </div>
-      <div class="barcode-hint" id="lblBarcodeHint">Arahkan kamera ke barcode</div>
-      <button class="barcode-stop" onclick="stopBarcodeScanner()" id="lblBarcodeStop">Batal</button>
-    </div>
+
 
     <div class="loading" id="searchLoading" style="display:none">
       <div class="spinner"></div>
