@@ -542,12 +542,17 @@ async function checkBarcodeStep() {
         show(['searchResult']);
       }
     } else {
-      // Not found — go to add mode
+      // Not found — go to add photo step
       setMode('add');
+      // Make sure photo step and input buttons are visible
+      document.getElementById('photoStep').style.display = 'block';
+      document.getElementById('inputBtns').style.display = 'grid';
+      document.getElementById('scanBtn').disabled = true;
       if (barcode) document.getElementById('fldBarcode').value = barcode;
+      // Show green hint
       const errEl = document.getElementById('errorMsg');
-      errEl.style.cssText = 'background:#EDF7EC;color:#4A7A44;border-color:#C8DEC5;display:block;';
-      errEl.textContent = '📝 Produk belum ada — silakan tambah!';
+      errEl.style.cssText = 'background:#EDF7EC;color:#4A7A44;border:1px solid #C8DEC5;border-radius:14px;padding:14px 18px;text-align:center;font-size:12px;display:block;';
+      errEl.textContent = '📝 Produk belum ada — foto produk untuk tambah!';
     }
   } catch(e) {
     skipBarcodeStep();
