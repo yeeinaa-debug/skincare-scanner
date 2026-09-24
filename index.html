@@ -146,7 +146,7 @@
     <button class="lang-btn" onclick="setLang('ko')">🇰🇷 KR</button>
   </div>
   <div style="display:flex;align-items:center;gap:8px;margin-top:8px;">
-    <div class="mode-toggle" style="flex:1">
+    <div class="mode-toggle" style="flex:1;visibility:hidden;" id="modeToggle">
       <button class="mode-btn active" id="modeAddBtn" onclick="setMode('add')">➕ <span id="lblModeAdd">Tambah</span></button>
       <button class="mode-btn" id="modeSearchBtn" onclick="setMode('search')">🔍 <span id="lblModeSearch">Cari</span></button>
     </div>
@@ -156,28 +156,30 @@
 
 <div class="container">
 
-  <!-- ADD MODE -->
-  <div id="addMode">
-
-    <!-- Step 1: Barcode input -->
-    <div id="barcodeStep">
-      <div class="field-group" style="margin-bottom:8px;">
-        <div class="field-label" id="lblAddBarcode">Barcode Produk</div>
-        <div class="barcode-input-wrap">
-          <input class="field-input" type="text" id="addBarcodeInput" placeholder="Scan atau ketik barcode...">
-          <button class="barcode-scan-btn" onclick="startBarcodeScanner('addStep')" id="lblAddBarcodeScan">📷</button>
-        </div>
-      </div>
-      <button class="scan-btn" onclick="checkBarcodeStep()" id="btnBarcodeNext">
-        <span>→</span> <span id="lblBarcodeNext">Lanjut</span>
-      </button>
-      <div style="text-align:center;margin-top:10px;">
-        <button onclick="skipBarcodeStep()" style="background:none;border:none;color:var(--muted);font-size:13px;cursor:pointer;text-decoration:underline;" id="lblSkipBarcode">Lewati (tidak ada barcode)</button>
-      </div>
+  <!-- LANDING: Barcode scan -->
+  <div id="barcodeStep">
+    <div style="text-align:center;padding:8px 0 4px;">
+      <div style="font-size:40px;margin-bottom:8px;">🔍</div>
+      <div style="font-family:'DM Serif Display',serif;font-size:18px;color:var(--text);margin-bottom:4px;" id="lblScanBarcode">Scan Barcode Produk</div>
+      <div style="font-size:12px;color:var(--muted);" id="lblScanBarcodeHint">Cek apakah produk sudah tersimpan</div>
     </div>
+    <div class="barcode-input-wrap" style="margin-top:12px;">
+      <input class="field-input" type="text" id="addBarcodeInput" placeholder="Scan atau ketik barcode...">
+      <button class="barcode-scan-btn" onclick="startBarcodeScanner('addStep')">📷</button>
+    </div>
+    <button class="scan-btn" onclick="checkBarcodeStep()" id="btnBarcodeNext" style="margin-top:10px;">
+      <span>🔍</span> <span id="lblBarcodeNext">Cek Barcode</span>
+    </button>
+    <div style="text-align:center;margin-top:10px;">
+      <button onclick="skipBarcodeStep()" style="background:none;border:none;color:var(--muted);font-size:13px;cursor:pointer;text-decoration:underline;" id="lblSkipBarcode">Lewati → langsung tambah produk baru</button>
+    </div>
+  </div>
 
-    <!-- Step 2: Photo scan (shown after barcode check) -->
-    <div id="photoStep" style="display:none">
+  <!-- ADD MODE -->
+  <div id="addMode" style="display:none;">
+
+    <!-- Photo scan -->
+    <div id="photoStep">
       <div class="input-btns" id="inputBtns">
         <div class="input-btn">
           <input type="file" id="cameraInput" accept="image/*" capture="environment">
@@ -201,7 +203,7 @@
       <button class="scan-btn" id="scanBtn" disabled>
         <span>✨</span> <span id="lblScan">Scan Produk</span>
       </button>
-    </div>
+    </div><!-- end photoStep -->
 
     <div class="loading" id="loading">
       <div class="spinner"></div>
@@ -472,6 +474,8 @@ function setLang(l) {
   document.getElementById('scanAgainBtn').textContent = tx.scanAgain;
   document.getElementById('lblModeAdd').textContent = tx.modeAdd;
   if(document.getElementById('lblAddBarcode')) document.getElementById('lblAddBarcode').textContent = tx.addBarcode;
+  if(document.getElementById('lblScanBarcode')) document.getElementById('lblScanBarcode').textContent = tx.scanBarcode;
+  if(document.getElementById('lblScanBarcodeHint')) document.getElementById('lblScanBarcodeHint').textContent = tx.scanBarcodeHint;
   if(document.getElementById('lblBarcodeNext')) document.getElementById('lblBarcodeNext').textContent = tx.barcodeNext;
   if(document.getElementById('lblSkipBarcode')) document.getElementById('lblSkipBarcode').textContent = tx.skipBarcode;
   document.getElementById('lblModeSearch').textContent = tx.modeSearch;
@@ -501,6 +505,7 @@ function setMode(mode) {
   document.getElementById('modeSearchBtn').classList.toggle('active', mode === 'search');
   document.getElementById('addMode').style.display = mode === 'add' ? 'block' : 'none';
   document.getElementById('searchMode').style.display = mode === 'search' ? 'block' : 'none';
+  document.getElementById('barcodeStep').style.display = 'none';
   if (mode === 'search') stopBarcodeScanner();
 }
 
@@ -509,13 +514,14 @@ async function checkBarcodeStep() {
   const barcode = document.getElementById('addBarcodeInput').value.trim();
   if (!barcode) { skipBarcodeStep(); return; }
 
-  // Check if barcode exists in Notion
-  document.getElementById('btnBarcodeNext').innerHTML = '⏳';
+  document.getElementById('btnBarcodeNext').innerHTML = '⏳ Mengecek...';
   try {
     const res = await fetch(`${WORKER_URL}?action=search&barcode=${encodeURIComponent(barcode)}`);
     const data = await res.json();
+    document.getElementById('barcodeStep').style.display = 'none';
+    showModeToggle();
     if (data.products && data.products.length > 0) {
-      // Found! Show action card in search mode
+      // Found — show search mode
       setMode('search');
       document.getElementById('searchBarcodeInput').value = barcode;
       if (data.products.length === 1) {
@@ -534,21 +540,28 @@ async function checkBarcodeStep() {
         show(['searchResult']);
       }
     } else {
-      // Not found — go to photo step
-      skipBarcodeStep();
+      // Not found — go to add mode
+      setMode('add');
+      if (barcode) document.getElementById('fldBarcode').value = barcode;
+      const errEl = document.getElementById('errorMsg');
+      errEl.style.cssText = 'background:#EDF7EC;color:#4A7A44;border-color:#C8DEC5;display:block;';
+      errEl.textContent = '📝 Produk belum ada — silakan tambah!';
     }
   } catch(e) {
     skipBarcodeStep();
   } finally {
-    document.getElementById('btnBarcodeNext').innerHTML = '<span>→</span> <span id="lblBarcodeNext">' + t('barcodeNext') + '</span>';
+    document.getElementById('btnBarcodeNext').innerHTML = '<span>🔍</span> <span id="lblBarcodeNext">' + t('barcodeNext') + '</span>';
   }
 }
 
+function showModeToggle() {
+  document.getElementById('modeToggle').style.visibility = 'visible';
+}
+
 function skipBarcodeStep() {
-  const barcode = document.getElementById('addBarcodeInput').value.trim();
   document.getElementById('barcodeStep').style.display = 'none';
-  document.getElementById('photoStep').style.display = 'block';
-  if (barcode) document.getElementById('fldBarcode').value = barcode;
+  showModeToggle();
+  setMode('add');
 }
 
 // ---- BARCODE SCANNER ----
@@ -998,7 +1011,9 @@ function resetUpload() {
   document.getElementById('inputBtns').style.display = 'grid';
   // Go back to barcode step
   document.getElementById('barcodeStep').style.display = 'block';
-  document.getElementById('photoStep').style.display = 'none';
+  document.getElementById('addMode').style.display = 'none';
+  document.getElementById('searchMode').style.display = 'none';
+  document.getElementById('modeToggle').style.visibility = 'hidden';
   const scanBtn = document.getElementById('scanBtn');
   scanBtn.disabled = true;
   scanBtn.innerHTML = '<span>✨</span> <span id="lblScan">' + t('scan') + '</span>';
