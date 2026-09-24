@@ -363,7 +363,6 @@
 
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
 <script>
 const WORKER_URL = 'https://skincare-scanner.yeeinaa.workers.dev';
 const ALL_CONCERNS = ['Sensitive Skin','Dry Skin','Oily Skin','Redness','Acne','Anti-Aging','Brightening','Pores','Wrinkles','Hydration','Body Odor','Dark Spots'];
@@ -439,7 +438,6 @@ let currentFile = null;
 let selectedConcerns = [];
 let allBrands = [];
 let currentMode = 'add';
-let barcodeReader = null;
 let selectedProduct = null;
 let selectedExpOption = null;
 
@@ -564,42 +562,68 @@ function skipBarcodeStep() {
   setMode('add');
 }
 
-// ---- BARCODE SCANNER ----
+// ---- BARCODE SCANNER (Native BarcodeDetector) ----
+let barcodeStream = null;
+let barcodeAnimFrame = null;
+
 async function startBarcodeScanner(context) {
   const area = document.getElementById('barcodeArea');
   area.style.display = 'block';
   area.dataset.context = context;
 
+  // Check support
+  if (!('BarcodeDetector' in window)) {
+    stopBarcodeScanner();
+    alert('Browser kamu tidak support barcode scanner. Ketik barcode manual ya!');
+    return;
+  }
+
   try {
-    const codeReader = new ZXing.BrowserMultiFormatReader();
-    barcodeReader = codeReader;
-    const videoEl = document.getElementById('barcodeVideo');
-    await codeReader.decodeFromVideoDevice(null, videoEl, (result, err) => {
-      if (result) {
-        const code = result.getText();
-        stopBarcodeScanner();
-        if (context === 'search') {
-          document.getElementById('searchBarcodeInput').value = code;
-          searchByBarcode(code);
-        } else if (context === 'addStep') {
-          document.getElementById('addBarcodeInput').value = code;
-          checkBarcodeStep();
-        } else {
-          document.getElementById('fldBarcode').value = code;
-        }
-      }
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
     });
+    barcodeStream = stream;
+    const videoEl = document.getElementById('barcodeVideo');
+    videoEl.srcObject = stream;
+    await videoEl.play();
+
+    const detector = new BarcodeDetector({ formats: ['ean_13','ean_8','code_128','code_39','qr_code','upc_a','upc_e','itf','data_matrix'] });
+
+    const scan = async () => {
+      if (!barcodeStream) return;
+      try {
+        const barcodes = await detector.detect(videoEl);
+        if (barcodes.length > 0) {
+          const code = barcodes[0].rawValue;
+          stopBarcodeScanner();
+          const ctx = area.dataset.context;
+          if (ctx === 'search') {
+            document.getElementById('searchBarcodeInput').value = code;
+            searchByBarcode(code);
+          } else if (ctx === 'addStep') {
+            document.getElementById('addBarcodeInput').value = code;
+            checkBarcodeStep();
+          } else {
+            document.getElementById('fldBarcode').value = code;
+          }
+          return;
+        }
+      } catch {}
+      barcodeAnimFrame = requestAnimationFrame(scan);
+    };
+    barcodeAnimFrame = requestAnimationFrame(scan);
+
   } catch (e) {
     stopBarcodeScanner();
-    alert('Kamera tidak tersedia: ' + e.message);
+    alert('Kamera tidak bisa diakses: ' + e.message);
   }
 }
 
 function stopBarcodeScanner() {
-  if (barcodeReader) {
-    try { barcodeReader.reset(); } catch {}
-    barcodeReader = null;
-  }
+  if (barcodeAnimFrame) { cancelAnimationFrame(barcodeAnimFrame); barcodeAnimFrame = null; }
+  if (barcodeStream) { barcodeStream.getTracks().forEach(t => t.stop()); barcodeStream = null; }
+  const videoEl = document.getElementById('barcodeVideo');
+  if (videoEl) videoEl.srcObject = null;
   document.getElementById('barcodeArea').style.display = 'none';
 }
 
