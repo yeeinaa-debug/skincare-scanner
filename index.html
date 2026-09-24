@@ -149,6 +149,7 @@
     <div class="mode-toggle" style="flex:1;visibility:hidden;" id="modeToggle">
       <button class="mode-btn active" id="modeAddBtn" onclick="setMode('add')">➕ <span id="lblModeAdd">Tambah</span></button>
       <button class="mode-btn" id="modeSearchBtn" onclick="setMode('search')">🔍 <span id="lblModeSearch">Cari</span></button>
+      <button class="mode-btn" id="modeInventoryBtn" onclick="setMode('inventory')">📦 <span id="lblModeInventory">List</span></button>
     </div>
     <button onclick="location.reload()" style="background:var(--white);border:1.5px solid var(--sage-light);border-radius:10px;padding:8px 12px;cursor:pointer;font-size:15px;" title="Refresh">🔄</button>
   </div>
@@ -296,6 +297,61 @@
     <button class="scan-again-btn" id="scanAgainBtn">+ Scan produk lain</button>
   </div>
 
+  <!-- INVENTORY MODE -->
+  <div id="inventoryMode" style="display:none">
+    <div class="inv-controls">
+      <input class="inv-search" type="text" id="invSearch" placeholder="🔍 Cari nama / brand..." oninput="filterInventory()">
+      <div class="inv-filters" id="invFilters">
+        <button class="inv-filter-btn active" onclick="setInvFilter('all', this)" id="lblFilterAll">Semua</button>
+        <button class="inv-filter-btn" onclick="setInvFilter('Active', this)" id="lblFilterActive">Active</button>
+        <button class="inv-filter-btn" onclick="setInvFilter('Empty', this)" id="lblFilterEmpty">Empty</button>
+        <button class="inv-filter-btn" onclick="setInvFilter('nobarcode', this)" id="lblFilterNoBarcode">No Barcode</button>
+      </div>
+      <div class="inv-sort">
+        <select id="invSort" onchange="filterInventory()">
+          <option value="name">Sort: Nama A-Z</option>
+          <option value="brand">Sort: Brand A-Z</option>
+          <option value="expired">Sort: Expired</option>
+          <option value="qty">Sort: Qty</option>
+          <option value="qty_asc">Sort: Qty ↑</option>
+        </select>
+        <button class="refresh-btn" onclick="loadInventory(true)" title="Refresh">🔄</button>
+      </div>
+      <div class="inv-count" id="invCount"></div>
+    </div>
+
+    <div class="loading" id="invLoading" style="display:none">
+      <div class="spinner"></div>
+      <p>Memuat produk...</p>
+    </div>
+    <div class="error-msg" id="invError"></div>
+    <div class="inv-list" id="invList"></div>
+
+    <!-- Detail panel -->
+    <div class="inv-detail" id="invDetail">
+      <div class="inv-detail-header">
+        <div class="inv-detail-name" id="invDetailName"></div>
+        <div class="inv-detail-brand" id="invDetailBrand"></div>
+      </div>
+      <div class="inv-detail-body">
+        <div class="inv-detail-row"><span class="inv-detail-label">Type</span><span class="inv-detail-value" id="invDetailType"></span></div>
+        <div class="inv-detail-row"><span class="inv-detail-label">Status</span><span class="inv-detail-value" id="invDetailStatus"></span></div>
+        <div class="inv-detail-row"><span class="inv-detail-label">Qty</span><span class="inv-detail-value" id="invDetailQty"></span></div>
+        <div class="inv-detail-row"><span class="inv-detail-label">Expired</span><span class="inv-detail-value" id="invDetailExp"></span></div>
+        <div class="inv-detail-row"><span class="inv-detail-label">Lokasi</span><span class="inv-detail-value" id="invDetailPlace"></span></div>
+        <div class="inv-detail-row">
+          <span class="inv-detail-label">Barcode</span>
+          <span class="inv-detail-value" id="invDetailBarcode"></span>
+        </div>
+        <div class="inv-barcode-input" id="invBarcodeInputWrap" style="display:none">
+          <input type="text" id="invBarcodeField" placeholder="Ketik atau scan barcode">
+          <button onclick="saveInvBarcode()">💾</button>
+        </div>
+        <button class="inv-back-btn" onclick="closeInvDetail()">← Kembali</button>
+      </div>
+    </div>
+  </div>
+
   <!-- SEARCH MODE -->
   <div id="searchMode" style="display:none">
     <div class="field-group">
@@ -383,7 +439,7 @@ const LANGS = {
     saveNotion:'Simpan ke Notion', saving:'⏳ Menyimpan...',
     success:'Berhasil ditambahkan ke Notion!', scanAgain:'+ Scan produk lain',
     warnDupe:'Sepertinya ada produk serupa:', errNotion:'Gagal simpan: ', retry:'🔄 Coba Lagi',
-    modeAdd:'Tambah', modeSearch:'Cari', addBarcode:'Barcode Produk', barcodeNext:'Lanjut', skipBarcode:'Lewati (tidak ada barcode)', barcodeSearch:'Scan atau ketik barcode',
+    modeAdd:'Tambah', modeSearch:'Cari', modeInventory:'List', addBarcode:'Barcode Produk', barcodeNext:'Lanjut', skipBarcode:'Lewati (tidak ada barcode)', barcodeSearch:'Scan atau ketik barcode',
     searching:'Mencari produk...', searchFound:'Produk ditemukan',
     barcodeHint:'Arahkan kamera ke barcode', barcodeStop:'Batal',
     actionQty:'Qty', actionExp:'Expired', actionStatus:'Status',
@@ -404,7 +460,7 @@ const LANGS = {
     saveNotion:'Save to Notion', saving:'⏳ Saving...',
     success:'Successfully added to Notion!', scanAgain:'+ Scan another product',
     warnDupe:'Similar product found:', errNotion:'Failed to save: ', retry:'🔄 Retry',
-    modeAdd:'Add', modeSearch:'Search', addBarcode:'Product Barcode', barcodeNext:'Next', skipBarcode:'Skip (no barcode)', barcodeSearch:'Scan or type barcode',
+    modeAdd:'Add', modeSearch:'Search', modeInventory:'List', addBarcode:'Product Barcode', barcodeNext:'Next', skipBarcode:'Skip (no barcode)', barcodeSearch:'Scan or type barcode',
     searching:'Searching product...', searchFound:'Product found',
     barcodeHint:'Point camera at barcode', barcodeStop:'Cancel',
     actionQty:'Qty', actionExp:'Expired', actionStatus:'Status',
@@ -425,7 +481,7 @@ const LANGS = {
     saveNotion:'Notion에 저장', saving:'⏳ 저장 중...',
     success:'Notion에 성공적으로 추가되었습니다!', scanAgain:'+ 다른 제품 스캔',
     warnDupe:'유사한 제품이 있습니다:', errNotion:'저장 실패: ', retry:'🔄 다시 시도',
-    modeAdd:'추가', modeSearch:'검색', addBarcode:'제품 바코드', barcodeNext:'다음', skipBarcode:'건너뛰기 (바코드 없음)', barcodeSearch:'바코드 스캔 또는 입력',
+    modeAdd:'추가', modeSearch:'검색', modeInventory:'목록', addBarcode:'제품 바코드', barcodeNext:'다음', skipBarcode:'건너뛰기 (바코드 없음)', barcodeSearch:'바코드 스캔 또는 입력',
     searching:'제품 검색 중...', searchFound:'제품 찾음',
     barcodeHint:'바코드에 카메라를 대세요', barcodeStop:'취소',
     actionQty:'수량', actionExp:'유통기한', actionStatus:'상태',
@@ -482,6 +538,7 @@ function setLang(l) {
   if(document.getElementById('lblBarcodeNext')) document.getElementById('lblBarcodeNext').textContent = tx.barcodeNext;
   if(document.getElementById('lblSkipBarcode')) document.getElementById('lblSkipBarcode').textContent = tx.skipBarcode;
   document.getElementById('lblModeSearch').textContent = tx.modeSearch;
+  document.getElementById('lblModeInventory').textContent = tx.modeInventory;
   document.getElementById('lblBarcodeSearch').textContent = tx.barcodeSearch;
   document.getElementById('lblSearching').textContent = tx.searching;
   document.getElementById('lblSearchFound').textContent = tx.searchFound;
@@ -506,10 +563,13 @@ function setMode(mode) {
   currentMode = mode;
   document.getElementById('modeAddBtn').classList.toggle('active', mode === 'add');
   document.getElementById('modeSearchBtn').classList.toggle('active', mode === 'search');
+  document.getElementById('modeInventoryBtn').classList.toggle('active', mode === 'inventory');
   document.getElementById('addMode').style.display = mode === 'add' ? 'block' : 'none';
   document.getElementById('searchMode').style.display = mode === 'search' ? 'block' : 'none';
+  document.getElementById('inventoryMode').style.display = mode === 'inventory' ? 'block' : 'none';
   document.getElementById('barcodeStep').style.display = 'none';
   if (mode === 'search') stopBarcodeScanner();
+  if (mode === 'inventory') loadInventory();
 }
 
 // ---- ADD MODE BARCODE STEP ----
@@ -1143,6 +1203,177 @@ function showError(msg) {
   const el = document.getElementById('errorMsg');
   el.textContent = '⚠️ ' + msg;
   el.style.display = 'block';
+}
+
+window.addEventListener('DOMContentLoaded', () => loadAllOptions());
+
+// ---- INVENTORY ----
+let allInventory = [];
+let invFilterStatus = 'all';
+let selectedInvProduct = null;
+
+async function loadInventory(forceRefresh) {
+  if (allInventory.length > 0 && !forceRefresh) {
+    filterInventory();
+    return;
+  }
+  show(['invLoading']);
+  hide(['invList','invDetail','invError']);
+  try {
+    let allPages = [];
+    let hasMore = true, startCursor = undefined;
+    while (hasMore) {
+      const body = { page_size: 100 };
+      if (startCursor) body.start_cursor = startCursor;
+      const res = await fetch(WORKER_URL + '?action=inventory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed');
+      allPages = allPages.concat(data.results || []);
+      hasMore = data.has_more;
+      startCursor = data.next_cursor;
+    }
+    allInventory = allPages;
+    hide(['invLoading']);
+    filterInventory();
+  } catch(e) {
+    hide(['invLoading']);
+    const errEl = document.getElementById('invError');
+    errEl.textContent = '⚠️ ' + e.message;
+    errEl.style.display = 'block';
+  }
+}
+
+function setInvFilter(status, btn) {
+  invFilterStatus = status;
+  document.querySelectorAll('.inv-filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  filterInventory();
+}
+
+function filterInventory() {
+  const search = (document.getElementById('invSearch').value || '').toLowerCase();
+  const sort = document.getElementById('invSort').value;
+
+  let filtered = allInventory.filter(p => {
+    const name = (p.product_name || '').toLowerCase();
+    const brand = (p.brand || '').toLowerCase();
+    const matchSearch = !search || name.includes(search) || brand.includes(search);
+    const matchStatus =
+      invFilterStatus === 'all' ? true :
+      invFilterStatus === 'nobarcode' ? !p.barcode :
+      p.status === invFilterStatus;
+    return matchSearch && matchStatus;
+  });
+
+  // Sort
+  filtered.sort((a, b) => {
+    if (sort === 'name') return (a.product_name||'').localeCompare(b.product_name||'');
+    if (sort === 'brand') return (a.brand||'').localeCompare(b.brand||'');
+    if (sort === 'expired') return (a.expired||'').localeCompare(b.expired||'');
+    if (sort === 'qty') return (b.amount||0) - (a.amount||0);
+    if (sort === 'qty_asc') return (a.amount||0) - (b.amount||0);
+    return 0;
+  });
+
+  document.getElementById('invCount').textContent = filtered.length + ' produk';
+  renderInventory(filtered);
+}
+
+function renderInventory(items) {
+  const list = document.getElementById('invList');
+  list.innerHTML = '';
+  if (items.length === 0) {
+    list.innerHTML = '<div style="text-align:center;color:var(--muted);padding:32px;font-size:13px;">Tidak ada produk</div>';
+    return;
+  }
+  items.forEach(p => {
+    const div = document.createElement('div');
+    div.className = 'inv-item';
+    const statusCls = p.status === 'Empty' ? 'inv-badge-status-empty' : 'inv-badge-status-active';
+    const noBarcode = !p.barcode ? '<span class="inv-badge inv-badge-nobarcode">No Barcode</span>' : '';
+    div.innerHTML = `
+      <div class="inv-item-top">
+        <div>
+          <div class="inv-item-name">${p.product_name || '—'}</div>
+          <div class="inv-item-brand">${p.brand || ''}</div>
+        </div>
+        <div class="inv-item-right">
+          <div class="inv-item-qty">${p.amount ?? 1}</div>
+          <div class="inv-item-exp">${p.expired || '—'}</div>
+        </div>
+      </div>
+      <div class="inv-item-badges">
+        ${p.type ? `<span class="inv-badge inv-badge-type">${p.type}</span>` : ''}
+        ${p.place ? `<span class="inv-badge inv-badge-place">${p.place}</span>` : ''}
+        <span class="inv-badge ${statusCls}">${p.status || 'Active'}</span>
+        ${noBarcode}
+      </div>`;
+    div.onclick = () => showInvDetail(p);
+    list.appendChild(div);
+  });
+}
+
+function showInvDetail(product) {
+  selectedInvProduct = product;
+  hide(['invList']);
+  document.getElementById('invDetailName').textContent = product.product_name || '—';
+  document.getElementById('invDetailBrand').textContent = product.brand || '';
+  document.getElementById('invDetailType').textContent = product.type || '—';
+  document.getElementById('invDetailStatus').textContent = product.status || 'Active';
+  document.getElementById('invDetailQty').textContent = product.amount ?? 1;
+  document.getElementById('invDetailExp').textContent = product.expired || '—';
+  document.getElementById('invDetailPlace').textContent = product.place || '—';
+
+  const barcodeVal = document.getElementById('invDetailBarcode');
+  const barcodeInputWrap = document.getElementById('invBarcodeInputWrap');
+  if (product.barcode) {
+    barcodeVal.textContent = product.barcode;
+    barcodeInputWrap.style.display = 'none';
+  } else {
+    barcodeVal.textContent = '—';
+    barcodeInputWrap.style.display = 'flex';
+    document.getElementById('invBarcodeField').value = '';
+  }
+  document.getElementById('invDetail').style.display = 'block';
+}
+
+function closeInvDetail() {
+  document.getElementById('invDetail').style.display = 'none';
+  show(['invList']);
+}
+
+async function saveInvBarcode() {
+  if (!selectedInvProduct) return;
+  const barcode = document.getElementById('invBarcodeField').value.trim();
+  if (!barcode) return;
+
+  const btn = document.querySelector('#invBarcodeInputWrap button');
+  btn.textContent = '⏳';
+
+  try {
+    const res = await fetch(WORKER_URL + '?action=update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ page_id: selectedInvProduct.id, barcode })
+    });
+    if (!res.ok) throw new Error('Failed');
+
+    // Update local data
+    selectedInvProduct.barcode = barcode;
+    const idx = allInventory.findIndex(p => p.id === selectedInvProduct.id);
+    if (idx >= 0) allInventory[idx].barcode = barcode;
+
+    document.getElementById('invDetailBarcode').textContent = barcode;
+    document.getElementById('invBarcodeInputWrap').style.display = 'none';
+    btn.textContent = '💾';
+  } catch(e) {
+    alert('Gagal simpan: ' + e.message);
+    btn.textContent = '💾';
+  }
 }
 
 window.addEventListener('DOMContentLoaded', () => loadAllOptions());
